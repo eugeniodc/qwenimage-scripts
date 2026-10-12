@@ -1,0 +1,9 @@
+# Dependencias oficiales para Qwen-Image-2.1-Turbo
+# Requiere diffusers desde git con soporte para sampling sigmas (#14950)
+torch
+torchvision
+git+https://github.com/huggingface/diffusers.git
+transformers>=5.17.0
+accelerate
+peft
+pillow

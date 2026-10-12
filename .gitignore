@@ -1,0 +1,76 @@
+# ==============================================================================
+# Entorno Virtual y Paquetes de Python
+# ==============================================================================
+venv/
+.venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Bytecode y Caché de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ==============================================================================
+# Modelos, Pesos y Descargas Locales de IA (Evitar commits pesados de GBs)
+# ==============================================================================
+cache/
+.cache/
+models/
+ComfyUI/models/
+*.safetensors
+*.gguf
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# ==============================================================================
+# Carpetas de Salida y Generaciones (Outputs)
+# ==============================================================================
+outputs/*
+!outputs/.gitkeep
+output_art/*
+!output_art/.gitkeep
+
+# ==============================================================================
+# Imágenes de Muestra (Sample Images)
+# Excluir todas las imágenes locales para privacidad
+# ==============================================================================
+sample_images/*
+!sample_images/README.md
+!sample_images/.gitkeep
+
+# ==============================================================================
+# Logs y Archivos Temporales
+# ==============================================================================
+*.log
+*.tmp
+*.temp
+.pytest_cache/
+
+# ==============================================================================
+# Sistema Operativo (macOS / Linux / Windows)
+# ==============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ==============================================================================
+# IDEs y Editores de Código
+# ==============================================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
