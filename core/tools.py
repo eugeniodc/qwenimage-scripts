@@ -63,8 +63,8 @@ def resolve_image_path(name_or_path: str) -> str:
       - Nombre de archivo en outputs/ (ej: 'mi_foto.png')
       - Ruta relativa o absoluta directa
     """
-    if not name_or_path:
-        raise ValueError("Se requiere una ruta o nombre de imagen.")
+    if not name_or_path or not name_or_path.strip():
+        raise ValueError("Se requiere una ruta o nombre de imagen válido.")
 
     cleaned = name_or_path.strip()
     lower = cleaned.lower()
