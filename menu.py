@@ -543,7 +543,7 @@ def main():
         print("=" * 62)
         print(f"      🤖 PANEL DE CONTROL — QWEN-IMAGE-2.1-TURBO [{status_tag}]")
         print("=" * 62)
-        print("  [A] 🧠 MODO AGENTE LOCAL (MLX Qwen2.5-7B Uncensored)")
+        print("  [A] 🧠 MODO AGENTE LOCAL (vía oMLX • Qwen2.5-7B Uncensored)")
         print("  ─────────────────────────────────────────────────────────────")
         print("  [1] 🎨 Generar imagen desde texto (Text-to-Image)")
         print("  [2] 🖌️  Editar imagen existente (Image Editing)")

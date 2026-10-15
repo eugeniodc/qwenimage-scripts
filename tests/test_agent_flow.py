@@ -24,7 +24,7 @@ from core.tools import (
     outfit_swap,
     edit_image,
 )
-from agent import MLXImageAgent, SYSTEM_PROMPT
+from agent import OMLXImageAgent, SYSTEM_PROMPT
 
 
 class TestAgentAndCoreTools(unittest.TestCase):
@@ -53,7 +53,7 @@ class TestAgentAndCoreTools(unittest.TestCase):
             self.assertTrue(Path(last_img).is_file())
 
     def test_json_action_parsing(self):
-        agent = MLXImageAgent(model_repo="dummy")
+        agent = OMLXImageAgent()
 
         # Caso 1: JSON con bloque markdown ```json
         sample_response = """
@@ -90,6 +90,12 @@ class TestAgentAndCoreTools(unittest.TestCase):
         sample_response3 = "¡Hola! Soy tu asistente creativo. ¿Qué imagen deseas generar hoy?"
         parsed3 = agent._extract_json_action(sample_response3)
         self.assertIsNone(parsed3)
+
+    def test_omlx_live_connection(self):
+        agent = OMLXImageAgent()
+        # Verificar handshake con el servidor local oMLX
+        connected = agent.check_connection()
+        self.assertTrue(connected, "El servidor oMLX en http://localhost:8000 debe estar activo")
 
 
 if __name__ == "__main__":

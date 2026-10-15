@@ -2,10 +2,8 @@
 """
 agent.py
 Agente Inteligente Multimodal para Qwen-Image-2.1-Turbo
-Motor: Apple Silicon MLX (mlx-community/Qwen2.5-7B-Instruct-Uncensored-4bit)
-
-Permite operar la suite completa de generación y edición visual mediante lenguaje natural,
-encadenamiento automático de tareas, optimización de prompts y memoria de sesión.
+Conectado al servidor local de producción: oMLX (Apple Silicon Metal)
+Modelo por defecto: Qwen2.5-7B-Instruct-Uncensored-4bit en http://localhost:8000/v1
 """
 
 import os
@@ -20,7 +18,7 @@ os.environ["HF_HOME"] = str(PROJECT_DIR / "cache" / "huggingface")
 os.environ["TORCH_HOME"] = str(PROJECT_DIR / "cache" / "torch")
 os.environ["PIP_CACHE_DIR"] = str(PROJECT_DIR / "cache" / "pip")
 
-# Auto-detección y activación del entorno virtual
+# Auto-detección y activación del entorno virtual si aplica
 VENV_DIR = PROJECT_DIR / "venv"
 VENV_PYTHON = VENV_DIR / "bin" / "python"
 if VENV_PYTHON.exists():
@@ -34,6 +32,8 @@ if VENV_PYTHON.exists():
 import json
 import re
 import subprocess
+import urllib.error
+import urllib.request
 from typing import Dict, Any, List, Optional
 
 # Importar herramientas locales
@@ -49,13 +49,13 @@ from core.tools import (
     list_sample_images,
     list_outputs,
     get_latest_output,
-    resolve_image_path,
     OUTPUTS_DIR,
     SAMPLE_DIR,
 )
 
-# Identificador oficial del modelo MLX
-MLX_MODEL_REPO = "mlx-community/Qwen2.5-7B-Instruct-Uncensored-4bit"
+# Configuración del servidor oMLX
+DEFAULT_OMLX_URL = os.environ.get("OMLX_BASE_URL", "http://localhost:8000/v1")
+DEFAULT_OMLX_MODEL = os.environ.get("OMLX_MODEL", "Qwen2.5-7B-Instruct-Uncensored-4bit")
 
 SYSTEM_PROMPT = """Eres el Director de Arte y Agente Autónomo de Qwen-Image-2.1-Turbo.
 Tu labor es interpretar las intenciones creativas del usuario en lenguaje natural y ejecutar las herramientas visuales apropiadas.
@@ -106,7 +106,7 @@ Reglas para tu respuesta:
   "reply": "Mensaje cordial para el usuario en español explicando lo que vas a hacer"
 }
 ```
-- Si el usuario pide varias cosas a la vez (ej: "pon la cara de eugenio en ironman y cambia el ángulo a contrapicado"), puedes incluir múltiples acciones en el array "actions" secuencialmente. En los pasos posteriores, usa "last" como referencia para la imagen de entrada.
+- Si el usuario pide varias cosas a la vez (ej: "pon la cara de eugenio en ironman y cambia el ángulo a contrapicado"), incluye múltiples acciones en el array "actions" secuencialmente. En los pasos posteriores, usa "last" como referencia para la imagen de entrada.
 - Si el usuario hace una pregunta general, charla, o pide aclaraciones, responde cordialmente en texto plano sin el bloque JSON.
 """
 
@@ -122,32 +122,42 @@ TOOL_MAP = {
 }
 
 
-class MLXImageAgent:
-    def __init__(self, model_repo: str = MLX_MODEL_REPO):
-        self.model_repo = model_repo
-        self.model = None
-        self.tokenizer = None
+class OMLXImageAgent:
+    def __init__(self, base_url: str = DEFAULT_OMLX_URL, model_name: str = DEFAULT_OMLX_MODEL):
+        self.base_url = base_url.rstrip("/")
+        self.model_name = model_name
         self.history: List[Dict[str, str]] = []
         self.last_image: Optional[str] = get_latest_output()
 
-    def load_model(self):
-        """Carga el modelo MLX en memoria Metal."""
-        print("=" * 64)
-        print(f"🤖 Inicializando Agente MLX en Apple Silicon...")
-        print(f"📦 Modelo: {self.model_repo}")
-        print("=" * 64)
+    def check_connection(self) -> bool:
+        """Verifica que el servidor oMLX esté activo y el modelo disponible."""
+        models_url = f"{self.base_url}/models"
         try:
-            from mlx_lm import load
-            print("[+] Cargando pesos Metal en memoria unificada (puede tardar un momento en la 1ª descarga)...")
-            self.model, self.tokenizer = load(self.model_repo)
-            print("[✓] Modelo cargado y listo en GPU Metal.")
+            req = urllib.request.Request(models_url, headers={"User-Agent": "QwenAgent/1.0"})
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                models = [m.get("id") for m in data.get("data", [])]
+                if self.model_name in models:
+                    print(f"🟢 Servidor oMLX conectado ({self.base_url})")
+                    print(f"📦 Modelo activo: {self.model_name}")
+                    return True
+                else:
+                    print(f"🟡 Servidor oMLX activo, pero '{self.model_name}' no figura en la lista.")
+                    print(f"   Modelos disponibles: {', '.join(models[:4])}...")
+                    # Si no está exactamente ese nombre pero hay modelos, seleccionar el primero o avisar
+                    return True
+        except urllib.error.URLError as e:
+            print(f"🔴 No se pudo conectar al servidor oMLX en {self.base_url}: {e.reason}")
+            print("\n💡 Para iniciar el servidor oMLX en tu Mac, ejecuta en otra terminal:")
+            print("   omlx serve Qwen2.5-7B-Instruct-Uncensored-4bit --port 8000")
+            print("   o también: omlx start\n")
+            return False
         except Exception as e:
-            print(f"[!] Error al cargar modelo MLX: {e}")
-            print("Verifica que las dependencias de MLX estén instaladas.")
-            sys.exit(1)
+            print(f"🔴 Error de conexión con oMLX: {e}")
+            return False
 
     def _extract_json_action(self, response_text: str) -> Optional[Dict[str, Any]]:
-        """Busca y extrae el bloque JSON de acciones estructuradas de la respuesta."""
+        """Busca y extrae el bloque JSON de acciones de la respuesta del modelo."""
         # Buscar bloques ```json ... ```
         match = re.search(r"```json\s*(\{[\s\S]*?\})\s*```", response_text)
         if match:
@@ -156,7 +166,7 @@ class MLXImageAgent:
             except json.JSONDecodeError:
                 pass
 
-        # Buscar cualquier { ... } válido que contenga "actions" o "tool"
+        # Buscar cualquier bloque { ... } con actions o tool
         match2 = re.search(r"(\{[\s\S]*\"(?:actions|tool)\"[\s\S]*\})", response_text)
         if match2:
             try:
@@ -167,9 +177,8 @@ class MLXImageAgent:
         return None
 
     def execute_actions(self, actions_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Ejecuta una o varias acciones de herramientas y actualiza el estado."""
+        """Ejecuta una o varias acciones de herramientas y actualiza el estado de la sesión."""
         actions = actions_payload.get("actions", [])
-        # Soporte para formato simple con "tool" único
         if not actions and "tool" in actions_payload:
             actions = [{"tool": actions_payload["tool"], "params": actions_payload.get("params", {})}]
 
@@ -187,7 +196,6 @@ class MLXImageAgent:
             print(f"\n⚡ [Paso {i}/{len(actions)}] Ejecutando herramienta: {tool_name}")
             print(f"   Parámetros: {json.dumps(params, ensure_ascii=False, indent=2)}")
 
-            # Sustituir 'last' o rutas relativas si aplica
             try:
                 res = func(**params)
                 results.append(res)
@@ -203,63 +211,73 @@ class MLXImageAgent:
         return results
 
     def chat_step(self, user_input: str) -> str:
-        """Procesa un turno conversacional con el modelo MLX."""
-        from mlx_lm import generate
-
-        # Formatear el contexto con los archivos existentes para ayudar al modelo
+        """Envía el turno de conversación al servidor oMLX y procesa las herramientas."""
         samples = list_sample_images()
         last_img_name = Path(self.last_image).name if self.last_image else "Ninguna aún"
         context_hint = f"\n[Contexto del sistema: Imágenes en sample_images/: {samples}. Última imagen activa: '{last_img_name}']"
 
-        # Construir mensajes para el chat template
         messages = [{"role": "system", "content": SYSTEM_PROMPT + context_hint}]
-        # Incluir historial reciente (máximo últimos 6 turnos)
         for h in self.history[-6:]:
             messages.append(h)
         messages.append({"role": "user", "content": user_input})
 
-        # Aplicar plantilla de chat oficial de Qwen2.5
-        prompt = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
+        chat_url = f"{self.base_url}/chat/completions"
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "temperature": 0.3,
+            "max_tokens": 800,
+        }
 
-        print("\n🧠 Pensando...", end="", flush=True)
-        response = generate(
-            self.model,
-            self.tokenizer,
-            prompt=prompt,
-            max_tokens=700,
-            verbose=False,
-        )
-        print("\r" + " " * 20 + "\r", end="")  # Limpiar indicador
+        print("\n🧠 Consultando a oMLX...", end="", flush=True)
+        try:
+            req_data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                chat_url,
+                data=req_data,
+                headers={"Content-Type": "application/json", "User-Agent": "QwenAgent/1.0"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                resp_json = json.loads(resp.read().decode("utf-8"))
+                choices = resp_json.get("choices", [])
+                if not choices:
+                    return "\n[!] oMLX no devolvió ninguna respuesta."
+                response_text = choices[0]["message"]["content"]
+                
+                # Métricas opcionales devueltas por oMLX
+                usage = resp_json.get("usage", {})
+                speed = usage.get("generation_tokens_per_second")
+                speed_info = f" ({speed:.1f} tok/s)" if speed else ""
+        except Exception as e:
+            print("\r" + " " * 30 + "\r", end="")
+            return f"\n[!] Error al comunicarse con oMLX ({self.base_url}): {e}"
+
+        print("\r" + " " * 30 + "\r", end="")  # Limpiar indicador de carga
 
         # Analizar si la respuesta contiene comandos de herramientas
-        action_data = self._extract_json_action(response)
+        action_data = self._extract_json_action(response_text)
         if action_data:
             reply = action_data.get("reply", "Ejecutando la acción solicitada...")
-            print(f"\n🤖 {reply}\n")
+            print(f"\n🤖 {reply}{speed_info}\n")
             execution_results = self.execute_actions(action_data)
-            
-            # Registrar en historial
+
             self.history.append({"role": "user", "content": user_input})
             self.history.append({"role": "assistant", "content": f"{reply} (Acciones ejecutadas: {len(execution_results)})"})
-            
+
             if self.last_image:
                 return f"\n🎉 Proceso completado. Imagen lista en: outputs/{Path(self.last_image).name}"
             return "\n[✓] Operación finalizada."
         else:
-            # Respuesta puramente conversacional
             self.history.append({"role": "user", "content": user_input})
-            self.history.append({"role": "assistant", "content": response})
-            return f"\n🤖 {response}\n"
+            self.history.append({"role": "assistant", "content": response_text})
+            return f"\n🤖 {response_text}{speed_info}\n"
 
 
 def print_banner():
     print("""
 ╔═══════════════════════════════════════════════════════════════╗
-║        🤖 ASISTENTE CREATIVO QWEN-IMAGE-2.1 (MLX LOCAL)       ║
+║        🤖 ASISTENTE CREATIVO QWEN-IMAGE-2.1 (vía oMLX)        ║
 ║   Apple Silicon Metal • Sin Censura • Orquestación Autónoma   ║
 ╚═══════════════════════════════════════════════════════════════╝
 Comandos rápidos:
@@ -273,8 +291,13 @@ Comandos rápidos:
 
 
 def main():
-    agent = MLXImageAgent()
-    agent.load_model()
+    agent = OMLXImageAgent()
+    is_connected = agent.check_connection()
+    if not is_connected:
+        print("[!] No se puede iniciar el agente sin conexión al servidor oMLX.")
+        print("    Inicia el servidor y vuelve a intentarlo.")
+        sys.exit(1)
+
     print_banner()
 
     while True:
