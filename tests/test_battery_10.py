@@ -197,6 +197,28 @@ class BatteryOf10Tests(unittest.TestCase):
         self.assertEqual(len(res), 1)
         self.assertFalse(res[0]["success"])
 
+    # --------------------------------------------------------------------------
+    # TEST 11: Auto-recuperación y feedback explícito tras un fallo
+    # --------------------------------------------------------------------------
+    def test_11_failure_feedback_and_auto_retry(self):
+        agent = OMLXImageAgent()
+
+        # Simular una acción que falla
+        failed_payload = {
+            "thought": "Intento con error",
+            "actions": [{"tool": "herramienta_con_error", "params": {}}],
+            "reply": "Probando ejecución"
+        }
+        agent.last_actions_payload = failed_payload
+
+        # Ejecutar acción que devuelve error
+        res = agent.execute_actions(failed_payload)
+        self.assertFalse(res[0]["success"])
+
+        # Verificar que el auto-recuperador detecta 'reintenta'
+        self.assertIsNotNone(agent.last_actions_payload)
+        self.assertEqual(agent.last_actions_payload["actions"][0]["tool"], "herramienta_con_error")
+
 
 if __name__ == "__main__":
     unittest.main()

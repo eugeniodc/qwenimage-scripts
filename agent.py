@@ -92,6 +92,7 @@ Capacidades de las herramientas disponibles:
 
 Reglas para tu respuesta:
 - REGLA DE VELOCIDAD (POR DEFECTO): Todas las operaciones deben ejecutarse en modo rápido (fast=True, resolución ~1024px) para una respuesta hasta 4x más veloz y menor consumo de memoria, a menos que el usuario pida explícitamente "máxima calidad", "alta resolución" o "2K".
+- REGLA DE REINTENTOS TRAS FALLO: Si el usuario indica que la operación anterior falló ("falló", "no funcionó", "dio error", "intenta de nuevo", "otra vez", "repite", "vuelve a hacerlo"), o si en el historial ves que hubo un fallo, DEBES emitir INMEDIATAMENTE el bloque JSON con las herramientas para reintentar la acción. NO te limites a disculparte en texto plano; ejecuta la acción solicitada.
 - Si el usuario pide generar, editar o transformar imágenes, DEBES responder incluyendo un bloque JSON con este formato exacto:
 ```json
 {
@@ -129,6 +130,7 @@ class OMLXImageAgent:
         self.model_name = model_name
         self.history: List[Dict[str, str]] = []
         self.last_image: Optional[str] = get_latest_output()
+        self.last_actions_payload: Optional[Dict[str, Any]] = None
 
     def check_connection(self) -> bool:
         """Verifica que el servidor oMLX esté activo y el modelo disponible."""
@@ -145,7 +147,6 @@ class OMLXImageAgent:
                 else:
                     print(f"🟡 Servidor oMLX activo, pero '{self.model_name}' no figura en la lista.")
                     print(f"   Modelos disponibles: {', '.join(models[:4])}...")
-                    # Si no está exactamente ese nombre pero hay modelos, seleccionar el primero o avisar
                     return True
         except urllib.error.URLError as e:
             print(f"🔴 No se pudo conectar al servidor oMLX en {self.base_url}: {e.reason}")
@@ -179,6 +180,7 @@ class OMLXImageAgent:
 
     def execute_actions(self, actions_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Ejecuta una o varias acciones de herramientas y actualiza el estado de la sesión."""
+        self.last_actions_payload = actions_payload
         actions = actions_payload.get("actions", [])
         if not actions and "tool" in actions_payload:
             actions = [{"tool": actions_payload["tool"], "params": actions_payload.get("params", {})}]
@@ -191,7 +193,7 @@ class OMLXImageAgent:
 
             if not func:
                 print(f"[!] Herramienta desconocida solicitada: {tool_name}")
-                results.append({"tool": tool_name, "success": False, "error": "Herramienta no encontrada"})
+                results.append({"tool": tool_name, "success": False, "error": f"Herramienta '{tool_name}' no encontrada"})
                 continue
 
             print(f"\n⚡ [Paso {i}/{len(actions)}] Ejecutando herramienta: {tool_name}")
@@ -199,6 +201,7 @@ class OMLXImageAgent:
 
             try:
                 res = func(**params)
+                res["tool"] = tool_name
                 results.append(res)
                 if res.get("success") and res.get("output_path"):
                     self.last_image = res["output_path"]
@@ -216,6 +219,13 @@ class OMLXImageAgent:
         samples = list_sample_images()
         last_img_name = Path(self.last_image).name if self.last_image else "Ninguna aún"
         context_hint = f"\n[Contexto del sistema: Imágenes en sample_images/: {samples}. Última imagen activa: '{last_img_name}']"
+
+        # Detectar si el usuario pide reintentar
+        input_lower = user_input.lower().strip()
+        is_retry = any(kw in input_lower for kw in [
+            "reintenta", "otra vez", "de nuevo", "vuelve a intentar",
+            "prueba otra vez", "repite", "inténtalo de nuevo", "intenta de nuevo"
+        ])
 
         messages = [{"role": "system", "content": SYSTEM_PROMPT + context_hint}]
         for h in self.history[-6:]:
@@ -258,16 +268,40 @@ class OMLXImageAgent:
 
         # Analizar si la respuesta contiene comandos de herramientas
         action_data = self._extract_json_action(response_text)
+
+        # Auto-recuperación: si el usuario pidió reintentar y el modelo no emitió JSON, rescatar la última acción
+        if not action_data and is_retry and self.last_actions_payload:
+            print("\n🔄 [Auto-Recuperación] Reintentando la última acción de herramientas registrada...")
+            action_data = self.last_actions_payload
+            action_data["reply"] = "Reintentando la acción anterior..."
+
         if action_data:
             reply = action_data.get("reply", "Ejecutando la acción solicitada...")
             print(f"\n🤖 {reply}{speed_info}\n")
             execution_results = self.execute_actions(action_data)
 
-            self.history.append({"role": "user", "content": user_input})
-            self.history.append({"role": "assistant", "content": f"{reply} (Acciones ejecutadas: {len(execution_results)})"})
+            # Detectar fallos en las acciones
+            failures = [r for r in execution_results if not r.get("success")]
+            successes = [r for r in execution_results if r.get("success")]
 
-            if self.last_image:
-                return f"\n🎉 Proceso completado. Imagen lista en: outputs/{Path(self.last_image).name}"
+            if failures:
+                err_msg = failures[0].get("error", "Error en el subproceso")
+                failed_tool = failures[0].get("tool", "herramienta")
+                # Registrar el fallo en el historial para que oMLX sepa que no se completó
+                self.history.append({"role": "user", "content": user_input})
+                self.history.append({
+                    "role": "assistant",
+                    "content": f"{reply} [FALLO: La herramienta '{failed_tool}' devolvió error: {err_msg}]"
+                })
+                return f"\n❌ No se pudo completar la operación: {err_msg}\nPuedes decir 'inténtalo de nuevo' o usar el comando /retry."
+
+            # Todas las acciones tuvieron éxito
+            self.history.append({"role": "user", "content": user_input})
+            self.history.append({"role": "assistant", "content": f"{reply} (Completado con éxito: {len(successes)} acciones)"})
+
+            last_gen = successes[-1].get("output_file")
+            if last_gen:
+                return f"\n🎉 Proceso completado con éxito. Imagen lista en: outputs/{last_gen}"
             return "\n[✓] Operación finalizada."
         else:
             self.history.append({"role": "user", "content": user_input})
@@ -282,6 +316,7 @@ def print_banner():
 ║   Apple Silicon Metal • Sin Censura • Orquestación Autónoma   ║
 ╚═══════════════════════════════════════════════════════════════╝
 Comandos rápidos:
+  /retry     - Reintentar la última acción de herramientas
   /samples   - Ver imágenes disponibles en sample_images/
   /gallery   - Ver imágenes generadas en outputs/ (y abrir en Finder)
   /last      - Ver la última imagen generada activa
@@ -311,6 +346,19 @@ def main():
             if cmd in {"/exit", "/quit", "exit", "quit", "salir"}:
                 print("\n¡Hasta pronto!")
                 break
+            elif cmd in {"/retry", "/reintentar"}:
+                if agent.last_actions_payload:
+                    print("\n🔄 Reintentando última acción registrada...")
+                    res = agent.execute_actions(agent.last_actions_payload)
+                    failures = [r for r in res if not r.get("success")]
+                    successes = [r for r in res if r.get("success")]
+                    if failures:
+                        print(f"\n❌ El reintento falló: {failures[0].get('error')}")
+                    else:
+                        print(f"\n🎉 ¡Reintento completado con éxito! Imagen lista en: outputs/{successes[-1].get('output_file')}")
+                else:
+                    print("\n[!] No hay ninguna acción previa registrada para reintentar.")
+                continue
             elif cmd == "/samples":
                 samples = list_sample_images()
                 print(f"\n📂 Imágenes en sample_images/ ({len(samples)}):")
