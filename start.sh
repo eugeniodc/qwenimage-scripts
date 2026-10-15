@@ -8,4 +8,8 @@ if [ ! -d "venv" ]; then
 fi
 
 source venv/bin/activate
-python menu.py
+if [ "$1" = "--agent" ] || [ "$1" = "-a" ]; then
+    python agent.py
+else
+    python menu.py
+fi

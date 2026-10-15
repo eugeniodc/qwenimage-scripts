@@ -543,6 +543,8 @@ def main():
         print("=" * 62)
         print(f"      🤖 PANEL DE CONTROL — QWEN-IMAGE-2.1-TURBO [{status_tag}]")
         print("=" * 62)
+        print("  [A] 🧠 MODO AGENTE LOCAL (MLX Qwen2.5-7B Uncensored)")
+        print("  ─────────────────────────────────────────────────────────────")
         print("  [1] 🎨 Generar imagen desde texto (Text-to-Image)")
         print("  [2] 🖌️  Editar imagen existente (Image Editing)")
         print("  [3] 🔓 Editar imagen existente SIN CENSURA (Uncensored / AtomicChat)")
@@ -558,9 +560,12 @@ def main():
         print("  [0] 🚪 Salir")
         print("=" * 62)
         
-        choice = input("👉 Selecciona una opción (0-12): ").strip()
+        choice = input("👉 Selecciona una opción (A, 0-12): ").strip()
+        choice_lower = choice.lower()
 
-        if choice == "1":
+        if choice_lower in {"a", "agente", "agent"}:
+            run_script([str(PROJECT_DIR / "agent.py")])
+        elif choice == "1":
             menu_text_to_image()
         elif choice == "2":
             menu_image_editing()

@@ -4,9 +4,27 @@ Proyecto organizado según los estándares de la comunidad de IA para el modelo 
 
 ---
 
+## 🤖 Modo Agente Inteligente (Apple Silicon MLX)
+
+El proyecto cuenta con un **Agente Autónomo Local** ejecutado con **Apple MLX** y el modelo **`mlx-community/Qwen2.5-7B-Instruct-Uncensored-4bit`**.
+
+### ¿Qué ventajas ofrece el Agente?
+* **Lenguaje Natural:** Dile directamente lo que deseas: *"Pon la cara de eugenio.jpg en la foto de iron-man y cambia la perspectiva a contrapicado"*.
+* **Encadenamiento Multi-Paso:** Descompone peticiones complejas en pasos secuenciales pasando la última imagen activa entre herramientas automáticamente.
+* **Optimización de Prompts:** Traduce y enriquece automáticamente las descripciones a prompts fotográficos en inglés de alta calidad cinematográfica.
+* **100% Local y Sin Censura:** Acelerado en Metal con Apple MLX, sin cuotas de APIs ni filtros de rechazo moral.
+
+Para iniciarlo:
+```bash
+./start.sh --agent
+# O desde el menú interactivo pulsando 'A'
+```
+
+---
+
 ## ⚡ Inicio Rápido (Menú Interactivo)
 
-Para no tener que recordar comandos ni rutas, hemos añadido un **menú interactivo**:
+Para no tener que recordar comandos ni rutas, dispones también del **menú interactivo**:
 
 ```bash
 cd qwen_image_2_1_turbo
@@ -16,10 +34,9 @@ cd qwen_image_2_1_turbo
 *(O si lo prefieres: `python3 menu.py`)*
 
 ### ¿Qué hace el menú?
-* Te permite elegir mediante números las imágenes de `sample_images/` (como `eugenio.jpg`).
-* Genera texto a imagen, edición, intercambio de caras (*face swap*) y cambios de ángulo de cámara con un par de pulsaciones.
-* Muestra el tamaño que ocupan los modelos en la carpeta `cache/` y te permite limpiarlos.
-* Lista las imágenes generadas en `outputs/` y te ofrece abrirlas en el Finder de macOS.
+* Opción **[A]**: Accede directamente al Agente Autónomo.
+* Opciones **[1-10]**: Ejecución directa de cada herramienta (Face Swap, Outfit, Cámara, Outpaint, etc.).
+* Opciones **[11-12]**: Galería de imágenes y control de caché de modelos en disco.
 
 ---
 
