@@ -155,6 +155,18 @@ def parse_args():
         default=42,
         help="Semilla para reproducibilidad (por defecto: 42)",
     )
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        default=True,
+        help="Modo rápido (~1024px, 4x más veloz, por defecto)",
+    )
+    parser.add_argument(
+        "--2k",
+        dest="high_quality",
+        action="store_true",
+        help="Modo alta calidad 2K (~2048px)",
+    )
     return parser.parse_args()
 
 def main():
@@ -240,14 +252,15 @@ def main():
             print("[!] Continuando la generación en modo nativo...")
 
     # Generación
-    print("\n[+] Renderizando nuevo ángulo (8 pasos Turbo)...")
+    width, height = (2048, 2048) if args.high_quality else (1024, 1024)
+    print(f"\n[+] Renderizando nuevo ángulo {width}x{height} (8 pasos Turbo)...")
     generator = torch.Generator("cpu").manual_seed(args.seed)
 
     result = pipe(
         prompt=prompt,
         image=input_image,
-        width=2048,
-        height=2048,
+        width=width,
+        height=height,
         num_inference_steps=8,
         use_kv_cache=True,
         generator=generator,

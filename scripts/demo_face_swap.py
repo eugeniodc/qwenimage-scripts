@@ -41,6 +41,17 @@ ASPECT_RATIOS = {
     "9:16": (1536, 2752),
 }
 
+# Preajustes rápidos (~1K, hasta 4x más veloz, recomendado por defecto)
+ASPECT_RATIOS_FAST = {
+    "1:1":  (1024, 1024),
+    "4:3":  (1152, 896),
+    "3:4":  (896, 1152),
+    "3:2":  (1216, 832),
+    "2:3":  (832, 1216),
+    "16:9": (1344, 768),
+    "9:16": (768, 1344),
+}
+
 def resolve_path(p: str) -> str:
     if not p:
         return p
@@ -124,12 +135,25 @@ def parse_args():
         action="store_true",
         help="Invertir el orden de las imágenes (<image1> como cara y <image2> como destino)",
     )
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        default=True,
+        help="Modo rápido (~1024px, 4x más veloz, por defecto)",
+    )
+    parser.add_argument(
+        "--2k",
+        dest="high_quality",
+        action="store_true",
+        help="Modo alta calidad 2K (~2048px)",
+    )
     return parser.parse_args()
 
 def main():
     args = parse_args()
     device, dtype = get_target_device_and_dtype()
-    width, height = ASPECT_RATIOS[args.aspect_ratio]
+    ratios = ASPECT_RATIOS if args.high_quality else ASPECT_RATIOS_FAST
+    width, height = ratios[args.aspect_ratio]
     cache_dir = PROJECT_DIR / "cache" / "huggingface"
     outputs_dir = PROJECT_DIR / "outputs"
     cache_dir.mkdir(parents=True, exist_ok=True)

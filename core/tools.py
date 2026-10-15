@@ -234,6 +234,7 @@ def face_swap(
     source_face: str,
     target_image: str,
     use_lora: bool = True,
+    fast: bool = True,
     output_name: Optional[str] = None
 ) -> Dict[str, Any]:
     """
@@ -243,6 +244,7 @@ def face_swap(
         source_face: Imagen con la cara de origen (ej: 'eugenio.jpg').
         target_image: Imagen con el cuerpo/escena destino (ej: 'iron-man-2008-1626678790.avif' o 'last').
         use_lora: True para activar el LoRA BFS (Best Face Swap) de alta fidelidad.
+        fast: True para modo rápido (~1024px, 4x más veloz, por defecto), False para 2K.
         output_name: Nombre opcional de salida.
     """
     src = resolve_image_path(source_face)
@@ -257,6 +259,8 @@ def face_swap(
     ]
     if use_lora:
         args += ["--lora", "Alissonerdx/BFS-Best-Face-Swap"]
+    if not fast:
+        args.append("--2k")
 
     result = _run_script_subprocess(args)
     target_path = OUTPUTS_DIR / out_file
@@ -317,6 +321,7 @@ def outfit_swap(
     person_image: str,
     outfit_image: str,
     use_lora: bool = True,
+    fast: bool = True,
     output_name: Optional[str] = None
 ) -> Dict[str, Any]:
     """
@@ -326,6 +331,7 @@ def outfit_swap(
         person_image: Foto de la persona que vestirá la ropa (o 'last').
         outfit_image: Foto con la prenda, vestuario o referencia textil.
         use_lora: True para activar el LoRA de consistencia de vestuario.
+        fast: True para modo rápido (~1024px, 4x más veloz, por defecto), False para 2K.
         output_name: Nombre opcional de salida.
     """
     person = resolve_image_path(person_image)
@@ -340,6 +346,8 @@ def outfit_swap(
     ]
     if not use_lora:
         args.append("--no-lora")
+    if not fast:
+        args.append("--2k")
 
     result = _run_script_subprocess(args)
     target_path = OUTPUTS_DIR / out_file
@@ -352,6 +360,7 @@ def camera_angle(
     image_path: str,
     angle: str = "three_quarter_right",
     use_lora: bool = True,
+    fast: bool = True,
     output_name: Optional[str] = None
 ) -> Dict[str, Any]:
     """
@@ -368,6 +377,7 @@ def camera_angle(
             - 'high_angle'          (picado, desde arriba)
             - 'back_view'           (desde la espalda 180°)
         use_lora: True para activar el LoRA oficial de ángulos múltiples <mva>.
+        fast: True para modo rápido (~1024px, 4x más veloz, por defecto), False para 2K.
         output_name: Nombre opcional de salida.
     """
     img = resolve_image_path(image_path)
@@ -381,6 +391,8 @@ def camera_angle(
     ]
     if use_lora:
         args += ["--lora", "akhaliq/Qwen-Image-2.1-Multiple-Angles-LoRA"]
+    if not fast:
+        args.append("--2k")
 
     result = _run_script_subprocess(args)
     target_path = OUTPUTS_DIR / out_file
