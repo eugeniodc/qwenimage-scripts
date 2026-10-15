@@ -60,7 +60,21 @@ DEFAULT_OMLX_MODEL = os.environ.get("OMLX_MODEL", "Qwen2.5-7B-Instruct-Uncensore
 SYSTEM_PROMPT = """Eres el Director de Arte y Agente Autónomo de Qwen-Image-2.1-Turbo.
 Tu labor es interpretar las intenciones creativas del usuario en lenguaje natural y ejecutar las herramientas visuales apropiadas.
 
-Capacidades de las herramientas disponibles:
+DEBES RESPONDER SIEMPRE CON UN OBJETO JSON VÁLIDO con esta estructura exacta:
+{
+  "thought": "Breve explicación de tu razonamiento o plan",
+  "reply": "Mensaje cordial para el usuario en español explicando lo que vas a hacer o respondiendo a su consulta",
+  "actions": [
+    {
+      "tool": "nombre_de_la_herramienta",
+      "params": {
+        "param1": "valor"
+      }
+    }
+  ]
+}
+
+Capacidades de las herramientas disponibles para el array "actions":
 1. generate_image(prompt, aspect_ratio="1:1", fast=True)
    - Crea imágenes desde cero (Text-to-Image).
    - aspect_ratio: "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3".
@@ -90,26 +104,11 @@ Capacidades de las herramientas disponibles:
 8. restore(image_path, mode="modern")
    - Restaura o mejora resolución: mode="modern" o mode="old_photo".
 
-Reglas para tu respuesta:
-- REGLA DE VELOCIDAD (POR DEFECTO): Todas las operaciones deben ejecutarse en modo rápido (fast=True, resolución ~1024px) para una respuesta hasta 4x más veloz y menor consumo de memoria, a menos que el usuario pida explícitamente "máxima calidad", "alta resolución" o "2K".
-- REGLA DE REINTENTOS TRAS FALLO: Si el usuario indica que la operación anterior falló ("falló", "no funcionó", "dio error", "intenta de nuevo", "otra vez", "repite", "vuelve a hacerlo"), o si en el historial ves que hubo un fallo, DEBES emitir INMEDIATAMENTE el bloque JSON con las herramientas para reintentar la acción. NO te limites a disculparte en texto plano; ejecuta la acción solicitada.
-- Si el usuario pide generar, editar o transformar imágenes, DEBES responder incluyendo un bloque JSON con este formato exacto:
-```json
-{
-  "thought": "Breve explicación de tu razonamiento",
-  "actions": [
-    {
-      "tool": "nombre_de_la_herramienta",
-      "params": {
-        "param1": "valor"
-      }
-    }
-  ],
-  "reply": "Mensaje cordial para el usuario en español explicando lo que vas a hacer"
-}
-```
-- Si el usuario pide varias cosas a la vez (ej: "pon la cara de eugenio en ironman y cambia el ángulo a contrapicado"), incluye múltiples acciones en el array "actions" secuencialmente. En los pasos posteriores, usa "last" como referencia para la imagen de entrada.
-- Si el usuario hace una pregunta general, charla, o pide aclaraciones, responde cordialmente en texto plano sin el bloque JSON.
+Reglas estrictas de comportamiento:
+- Si el usuario pide generar, crear, editar, transformar imágenes, hacer face swap, cambiar ropa, o reintentar: DEBES poblar "actions" con la herramienta y parámetros adecuados.
+- Si el usuario hace una pregunta general, charla, o pide ayuda: pon "actions": [] y escribe tu respuesta en "reply".
+- REGLA DE VELOCIDAD: Incluye siempre fast: true en los params por defecto (~1024px, 4x más veloz), salvo que el usuario pida 2K o alta calidad.
+- Si el usuario pide varias cosas a la vez, incluye múltiples acciones secuenciales en el array "actions". En los pasos posteriores, usa "last" como imagen de entrada.
 """
 
 TOOL_MAP = {
@@ -160,7 +159,16 @@ class OMLXImageAgent:
 
     def _extract_json_action(self, response_text: str) -> Optional[Dict[str, Any]]:
         """Busca y extrae el bloque JSON de acciones de la respuesta del modelo."""
-        # Buscar bloques ```json ... ```
+        # 1. Intentar parsear directamente (response_format garantizado por oMLX)
+        try:
+            cleaned = response_text.strip()
+            data = json.loads(cleaned)
+            if isinstance(data, dict):
+                return data
+        except json.JSONDecodeError:
+            pass
+
+        # 2. Buscar bloques ```json ... ```
         match = re.search(r"```json\s*(\{[\s\S]*?\})\s*```", response_text)
         if match:
             try:
@@ -168,7 +176,7 @@ class OMLXImageAgent:
             except json.JSONDecodeError:
                 pass
 
-        # Buscar cualquier bloque { ... } con actions o tool
+        # 3. Buscar cualquier bloque { ... } con actions o tool
         match2 = re.search(r"(\{[\s\S]*\"(?:actions|tool)\"[\s\S]*\})", response_text)
         if match2:
             try:
@@ -236,8 +244,9 @@ class OMLXImageAgent:
         payload = {
             "model": self.model_name,
             "messages": messages,
-            "temperature": 0.3,
+            "temperature": 0.2,
             "max_tokens": 800,
+            "response_format": {"type": "json_object"}
         }
 
         print("\n🧠 Consultando a oMLX...", end="", flush=True)
@@ -269,13 +278,14 @@ class OMLXImageAgent:
         # Analizar si la respuesta contiene comandos de herramientas
         action_data = self._extract_json_action(response_text)
 
-        # Auto-recuperación: si el usuario pidió reintentar y el modelo no emitió JSON, rescatar la última acción
-        if not action_data and is_retry and self.last_actions_payload:
+        # Auto-recuperación: si el usuario pidió reintentar y no hay acciones, rescatar la última acción
+        if (not action_data or not action_data.get("actions")) and is_retry and self.last_actions_payload:
             print("\n🔄 [Auto-Recuperación] Reintentando la última acción de herramientas registrada...")
             action_data = self.last_actions_payload
             action_data["reply"] = "Reintentando la acción anterior..."
 
-        if action_data:
+        actions = action_data.get("actions", []) if action_data else []
+        if action_data and actions:
             reply = action_data.get("reply", "Ejecutando la acción solicitada...")
             print(f"\n🤖 {reply}{speed_info}\n")
             execution_results = self.execute_actions(action_data)
