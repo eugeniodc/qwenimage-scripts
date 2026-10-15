@@ -24,10 +24,10 @@ VENV_PYTHON = VENV_DIR / "bin" / "python"
 if VENV_PYTHON.exists():
     current_python = Path(sys.executable).resolve()
     target_python = VENV_PYTHON.resolve()
-    if current_python != target_python:
+    if sys.prefix != str(VENV_DIR) and current_python != target_python:
         os.environ["VIRTUAL_ENV"] = str(VENV_DIR)
         os.environ["PATH"] = f"{VENV_DIR}/bin:{os.environ.get('PATH', '')}"
-        os.execv(str(target_python), [str(target_python)] + sys.argv)
+        os.execv(str(VENV_PYTHON), [str(VENV_PYTHON)] + sys.argv)
 
 import json
 import re

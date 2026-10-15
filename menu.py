@@ -41,14 +41,14 @@ if not VENV_DIR.exists():
 if VENV_PYTHON.exists():
     current_python = Path(sys.executable).resolve()
     target_python = VENV_PYTHON.resolve()
-    if current_python != target_python:
+    if sys.prefix != str(VENV_DIR) and current_python != target_python:
         os.environ["VIRTUAL_ENV"] = str(VENV_DIR)
         os.environ["PATH"] = f"{VENV_DIR}/bin:{os.environ.get('PATH', '')}"
         os.environ["HF_HOME"] = str(CACHE_DIR / "huggingface")
         os.environ["TORCH_HOME"] = str(CACHE_DIR / "torch")
         os.environ["PIP_CACHE_DIR"] = str(CACHE_DIR / "pip")
         # os.execv reemplaza el proceso actual por el python del entorno virtual
-        os.execv(str(target_python), [str(target_python)] + sys.argv)
+        os.execv(str(VENV_PYTHON), [str(VENV_PYTHON)] + sys.argv)
 
 # Asegurar carpetas del proyecto
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)

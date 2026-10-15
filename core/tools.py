@@ -28,7 +28,7 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 def get_python_executable() -> str:
     """Devuelve el ejecutable de Python del venv si existe, o el actual."""
     if VENV_PYTHON.exists():
-        return str(VENV_PYTHON.resolve())
+        return str(VENV_PYTHON)
     return sys.executable
 
 
@@ -126,6 +126,7 @@ def _run_script_subprocess(args: List[str]) -> Dict[str, Any]:
     env["TORCH_HOME"] = str(CACHE_DIR / "torch")
     env["PIP_CACHE_DIR"] = str(CACHE_DIR / "pip")
     env["VIRTUAL_ENV"] = str(VENV_DIR)
+    env["PATH"] = f"{VENV_DIR}/bin:{env.get('PATH', '')}"
 
     print(f"\n[core.tools] 🚀 Ejecutando: {' '.join(cmd)}")
     start_time = time.time()
