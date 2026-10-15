@@ -239,8 +239,78 @@ def menu_face_swap():
 
     run_script(args)
 
+def menu_group_photo():
+    print("\n--- 👥 5. Unir Personas en una Misma Foto (Group Photo Merge) ---")
+    print("Paso 1: Selecciona la foto de la PRIMERA persona (<image1>)")
+    p1 = choose_file("Foto de la primera persona")
+    if not p1:
+        return
+
+    print("\nPaso 2: Selecciona la foto de la SEGUNDA persona (<image2>)")
+    p2 = choose_file("Foto de la segunda persona")
+    if not p2:
+        return
+
+    print("\n¿Cómo deseas unir a las personas?")
+    print("  [1] 🏖️  Nueva escena / entorno (sitúa a ambos en un lugar que elijas)")
+    print("  [2] 🖼️  Mantener el fondo de la primera foto (añade a la segunda persona al lado)")
+    mode_choice = input("👉 Elige modo (1 o 2) [por defecto 1]: ").strip()
+    is_keep_scene = mode_choice == "2"
+    mode = "keep_scene" if is_keep_scene else "new_scene"
+
+    scene = ""
+    if not is_keep_scene:
+        print("\nEjemplos de escenario:")
+        print("  • 'en una cafetería moderna y acogedora'")
+        print("  • 'en una playa al atardecer frente al mar'")
+        print("  • 'en una terraza de restaurante de noche con luces cálidas'")
+        scene = input("👉 Describe el entorno o escenario [cafetería acogedora]: ").strip()
+        if not scene:
+            scene = "at a stylish cozy cafe, sitting together enjoying coffee, warm ambient lighting"
+
+    print("\nEjemplos de pose o interacción:")
+    print("  • 'abrazados amistosamente sonriendo a la cámara'")
+    print("  • 'hombro con hombro sonriendo naturalmente'")
+    print("  • 'sentados juntos charlando relajadamente'")
+    interaction = input("👉 Describe la pose o interacción [hombro con hombro sonriendo]: ").strip()
+    if not interaction:
+        interaction = "standing shoulder to shoulder, smiling warmly, looking at the camera"
+
+    print("\nRelaciones de aspecto: [1] 4:3 (recomendado)  [2] 16:9 (horizontal)  [3] 1:1 (cuadrado)")
+    ar_choice = input("👉 Elige formato (1, 2, 3) [por defecto 1]: ").strip()
+    ar_map = {"1": "4:3", "2": "16:9", "3": "1:1"}
+    aspect = ar_map.get(ar_choice, "4:3")
+
+    print("\nModo de velocidad y resolución:")
+    print("  [1] ⚡ Rápido (~1024px, recomendado)")
+    print("  [2] 💎 Alta Calidad 2K (~2048px)")
+    speed_choice = input("👉 Elige modo (1 o 2) [por defecto 1]: ").strip()
+    is_fast = speed_choice != "2"
+
+    out_name = sanitize_output_filename(
+        input("\n👉 Nombre de archivo de salida [group_photo.png]: ").strip(),
+        "group_photo.png"
+    )
+
+    args = [
+        str(SCRIPTS_DIR / "demo_group_photo.py"),
+        "--person1", p1,
+        "--person2", p2,
+        "--mode", mode,
+        "--interaction", interaction,
+        "--aspect-ratio", aspect,
+        "--output", out_name,
+    ]
+    if scene:
+        args += ["--scene", scene]
+    if is_fast:
+        args.append("--fast")
+
+    run_script(args)
+
+
 def menu_camera_angle():
-    print("\n--- 🎥 4. Cambio de Ángulo de Cámara (Camera Angle / Perspective) ---")
+    print("\n--- 🎥 7. Cambio de Ángulo de Cámara (Camera Angle / Perspective) ---")
     img = choose_file("Elige la imagen a reorientar")
     if not img:
         return
@@ -281,7 +351,7 @@ def menu_camera_angle():
     run_script(args)
 
 def menu_outfit_swap():
-    print("\n--- 👔 4. Cambio de Ropa (Outfit Swap / Virtual Try-On) ---")
+    print("\n--- 👔 6. Cambio de Ropa (Outfit Swap / Virtual Try-On) ---")
     print("Paso 1: Selecciona la foto de la PERSONA (se mantendrán su rostro, cuerpo y fondo)")
     person = choose_file("Foto de la persona a vestir")
     if not person:
@@ -310,7 +380,7 @@ def menu_outfit_swap():
     run_script(args)
 
 def menu_outpaint():
-    print("\n--- 🖼️  6. Expansión de Lienzo (Outpainting / Uncrop) ---")
+    print("\n--- 🖼️  8. Expansión de Lienzo (Outpainting / Uncrop) ---")
     img = choose_file("Elige la imagen a expandir")
     if not img:
         return
@@ -343,7 +413,7 @@ def menu_outpaint():
     run_script(args)
 
 def menu_restore():
-    print("\n--- ✨ 7. Restauración y Mejora de Fotos (Restore & Upscale) ---")
+    print("\n--- ✨ 9. Restauración y Mejora de Fotos (Restore & Upscale) ---")
     img = choose_file("Elige la foto a restaurar")
     if not img:
         return
@@ -368,7 +438,7 @@ def menu_restore():
     run_script(args)
 
 def menu_merge_lora():
-    print("\n--- 🔀 8. Unir / Fusionar un LoRA (Merge & Fuse LoRA) ---")
+    print("\n--- 🔀 10. Unir / Fusionar un LoRA (Merge & Fuse LoRA) ---")
     print("Introduce el identificador de Hugging Face o la ruta a un archivo .safetensors local.")
     print("Ejemplos:")
     print("  • Hugging Face: Alissonerdx/BFS-Best-Face-Swap")
@@ -411,7 +481,7 @@ def menu_merge_lora():
     run_script(args)
 
 def menu_check_outputs():
-    print("\n--- 📂 9. Galería de Imágenes Construidas (outputs/) ---")
+    print("\n--- 📂 11. Galería de Imágenes Construidas (outputs/) ---")
     valid_exts = {".png", ".jpg", ".jpeg", ".webp"}
     files = [f for f in OUTPUTS_DIR.iterdir() if f.is_file() and f.suffix.lower() in valid_exts]
     if not files:
@@ -427,7 +497,7 @@ def menu_check_outputs():
             subprocess.run(["open", str(OUTPUTS_DIR)])
 
 def menu_check_cache():
-    print("\n--- 🔍 10. Estado del Almacenamiento y Caché ---")
+    print("\n--- 🔍 12. Estado del Almacenamiento y Caché ---")
     def get_dir_size(path):
         total = 0
         if path.exists():
@@ -477,17 +547,18 @@ def main():
         print("  [2] 🖌️  Editar imagen existente (Image Editing)")
         print("  [3] 🔓 Editar imagen existente SIN CENSURA (Uncensored / AtomicChat)")
         print("  [4] 🎭 Intercambio de caras (Face Swap / LoRA BFS)")
-        print("  [5] 👔 Cambio de ropa (Outfit Swap / LoRA Consistency)")
-        print("  [6] 🎥 Cambio de ángulo de cámara (Camera Angle / LoRA)")
-        print("  [7] 🖼️  Expansión de lienzo (Outpainting / Uncrop)")
-        print("  [8] ✨ Restauración de fotos (Photo Restore & Upscale)")
-        print("  [9] 🔀 Unir / Fusionar un LoRA (Merge & Fuse LoRA)")
-        print("  [10] 📂 Ver imágenes generadas (en outputs/)")
-        print("  [11] 🔍 Ver uso de disco y caché")
+        print("  [5] 👥 Unir personas en una foto (Group Photo Merge)")
+        print("  [6] 👔 Cambio de ropa (Outfit Swap / LoRA Consistency)")
+        print("  [7] 🎥 Cambio de ángulo de cámara (Camera Angle / LoRA)")
+        print("  [8] 🖼️  Expansión de lienzo (Outpainting / Uncrop)")
+        print("  [9] ✨ Restauración de fotos (Photo Restore & Upscale)")
+        print("  [10] 🔀 Unir / Fusionar un LoRA (Merge & Fuse LoRA)")
+        print("  [11] 📂 Ver imágenes generadas (en outputs/)")
+        print("  [12] 🔍 Ver uso de disco y caché")
         print("  [0] 🚪 Salir")
         print("=" * 62)
         
-        choice = input("👉 Selecciona una opción (0-11): ").strip()
+        choice = input("👉 Selecciona una opción (0-12): ").strip()
 
         if choice == "1":
             menu_text_to_image()
@@ -498,18 +569,20 @@ def main():
         elif choice == "4":
             menu_face_swap()
         elif choice == "5":
-            menu_outfit_swap()
+            menu_group_photo()
         elif choice == "6":
-            menu_camera_angle()
+            menu_outfit_swap()
         elif choice == "7":
-            menu_outpaint()
+            menu_camera_angle()
         elif choice == "8":
-            menu_restore()
+            menu_outpaint()
         elif choice == "9":
-            menu_merge_lora()
+            menu_restore()
         elif choice == "10":
-            menu_check_outputs()
+            menu_merge_lora()
         elif choice == "11":
+            menu_check_outputs()
+        elif choice == "12":
             menu_check_cache()
         elif choice in {"0", "q", "exit", "salir"}:
             print("\n¡Hasta luego!")

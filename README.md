@@ -34,6 +34,7 @@ qwen_image_2_1_turbo/
 │   ├── demo_image_editing.py # Edición a partir de bocetos
 │   ├── demo_image_editing_uncensored.py # 👈 Edición SIN CENSURA (AtomicChat GGUF)
 │   ├── demo_face_swap.py     # Intercambio de caras (LoRA BFS)
+│   ├── demo_group_photo.py   # 👈 Unir múltiples personas en una misma foto
 │   ├── demo_outfit_swap.py   # Cambio de ropa (LoRA Outfit Consistency)
 │   ├── demo_camera_angle.py  # Cambio de ángulo de cámara (LoRA Multiple-Angles <mva>)
 │   ├── demo_outpaint.py      # Expansión de lienzo / Uncrop (LoRA Outpaint)
@@ -72,7 +73,30 @@ Si prefieres ejecutar los scripts directamente sin el menú:
     --output eugenio_ironman_bfs.png
   ```
 
-### 2. Cambio de Ropa (Outfit Swap / Virtual Try-On)
+### 2. Unir Personas en una Misma Foto (Group Photo Merge)
+* **Modo Nueva Escena (los sitúa en un lugar nuevo juntos):**
+  ```bash
+  python scripts/demo_group_photo.py \
+    --person1 sample_images/eugenio.jpg \
+    --person2 sample_images/mujer.avif \
+    --mode new_scene \
+    --scene "en una cafetería moderna y acogedora con iluminación cálida" \
+    --interaction "hombro con hombro sonriendo a la cámara" \
+    --aspect-ratio 4:3 \
+    --output eugenio_amiga_cafe.png
+  ```
+
+* **Modo Mantener Fondo (añade a la segunda persona al entorno de la primera):**
+  ```bash
+  python scripts/demo_group_photo.py \
+    --person1 sample_images/eugenio.jpg \
+    --person2 sample_images/mujer.avif \
+    --mode keep_scene \
+    --interaction "de pie al lado sonriendo juntos amistosamente" \
+    --output eugenio_amiga_juntos.png
+  ```
+
+### 3. Cambio de Ropa (Outfit Swap / Virtual Try-On)
 ```bash
 python scripts/demo_outfit_swap.py \
   --person-image sample_images/eugenio.jpg \
