@@ -197,4 +197,28 @@ python scripts/demo_image_editing_uncensored.py \
   --output outputs/edit_uncensored.png
 ```
 
+---
+
+## 🗺️ Hoja de Ruta y Posibles Mejoras (Roadmap)
+
+A partir de la versión estable `v1.1.0-agent-stable`, se proyectan las siguientes extensiones evolutivas:
+
+1. **🎨 Interfaz Web Interactiva (Gradio / WebUI Local):**
+   - Panel de control web visual accesible desde el navegador con previsualización en tiempo real.
+   - Canvas interactivo para inpainting y outpainting con pincel de máscara.
+   - Galería interactiva con filtrado, metadatos EXIF de generación y descarga directa.
+   - Soporte arrastrar y soltar (*drag & drop*) de imágenes para Face Swap y Virtual Try-On.
+
+2. **👁️ Conexión Multimodal VLM Nativa en oMLX:**
+   - Soporte directo de modelos de visión local como `Qwen2-VL-7B` o `MiniCPM-V` corriendo en el servidor oMLX (`http://localhost:8000/v1`), eliminando la necesidad de cargar BLIP por separado en tareas de interrogación inversa.
+   - Activación dinámica configurable mediante la variable de entorno `OMLX_VISION_MODEL`.
+
+3. **🏋️ Pipeline de Fine-Tuning y Entrenamiento LoRA Local:**
+   - Scripts dedicados para entrenar adaptadores LoRA sobre personas, estilos artísticos o prendas específicas optimizados para Apple Silicon Metal (MPS).
+   - Generación automática de dataset de entrenamiento con etiquetado descriptivo asistido por el interrogador multimodal.
+
+4. **⚡ API REST Local (FastAPI) para Agentes Externos:**
+   - Exposición de endpoints HTTP tipados OpenAPI (`/v1/generate`, `/v1/edit`, `/v1/face-swap`, `/v1/interrogate`) en subproceso independiente.
+   - Integración nativa con agentes externos locales (como **Hermes Agent Hub**) para permitir generación y edición visual autónoma desde Telegram o flujos P2P.
+
 
