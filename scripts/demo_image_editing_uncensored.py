@@ -21,6 +21,8 @@ from pathlib import Path
 # Directorio raíz del proyecto (un nivel arriba de scripts/)
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
 
 # Configurar aislamiento local de caché en cache/
 os.environ["HF_HOME"] = str(PROJECT_DIR / "cache" / "huggingface")
@@ -29,6 +31,7 @@ os.environ["TORCH_HOME"] = str(PROJECT_DIR / "cache" / "torch")
 import torch
 from diffusers import QwenImage21Pipeline
 from diffusers.utils import load_image
+from core.prompt_utils import translate_and_enrich_prompt
 
 # Repositorio oficial del modelo sin censura
 UNCENSORED_REPO = "AtomicChat/Qwen-Image-2.1-Turbo-Uncensored-GGUF"
@@ -186,12 +189,13 @@ def main():
         print(f"[!] Error al cargar la imagen de entrada: {e}")
         sys.exit(1)
 
-    # 2. Formatear prompt para asegurar edición directa
-    prompt = args.prompt.strip()
-    if "<image1>" not in prompt:
-        formatted_prompt = f"Using <image1> as reference, {prompt}. Seamless photorealistic editing, natural lighting and consistent identity."
+    # 2. Formatear y enriquecer prompt para asegurar edición directa
+    raw_prompt = args.prompt.strip()
+    enriched_prompt = translate_and_enrich_prompt(raw_prompt, context_type="edit_uncensored")
+    if "<image1>" not in enriched_prompt:
+        formatted_prompt = f"Using <image1> as reference, {enriched_prompt}"
     else:
-        formatted_prompt = prompt
+        formatted_prompt = enriched_prompt
 
     print(f"\n[+] Prompt de edición aplicado:")
     print(f"    \"{formatted_prompt}\"")

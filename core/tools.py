@@ -11,6 +11,8 @@ import time
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
+from core.prompt_utils import translate_and_enrich_prompt
+
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = PROJECT_DIR / "scripts"
 OUTPUTS_DIR = PROJECT_DIR / "outputs"
@@ -162,15 +164,16 @@ def generate_image(
     Genera una nueva imagen desde una descripción en texto (Text-to-Image).
     
     Args:
-        prompt: Descripción detallada de la imagen a generar (en inglés o español).
+        prompt: Descripción detallada en inglés (traducción enriquecida con iluminación, atmósfera y estilo).
         aspect_ratio: Relación de aspecto ('1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3').
         fast: True para modo Turbo 1K (~1024px, rápido), False para máxima calidad 2K (~2048px).
         output_name: Nombre opcional para el archivo de salida en outputs/.
     """
     out_file = _generate_output_name("t2i", output_name)
+    processed_prompt = translate_and_enrich_prompt(prompt, context_type="t2i")
     args = [
         str(SCRIPTS_DIR / "demo_cli.py"),
-        "--prompt", prompt,
+        "--prompt", processed_prompt,
         "--aspect-ratio", aspect_ratio,
         "--output", out_file,
     ]
@@ -196,19 +199,20 @@ def edit_image(
     
     Args:
         image_path: Ruta o nombre de la imagen a editar (o 'last' para la última).
-        prompt: Instrucción de lo que se desea modificar o agregar.
+        prompt: Instrucción en inglés enriquecida con detalles de iluminación y coherencia.
         uncensored: True para usar el modelo abliterado sin filtros morales (AtomicChat GGUF).
         fast: True para modo rápido 1K, False para resolución 2K.
         output_name: Nombre opcional de salida.
     """
     resolved_src = resolve_image_path(image_path)
     out_file = _generate_output_name("edit_uncensored" if uncensored else "edit", output_name)
+    processed_prompt = translate_and_enrich_prompt(prompt, context_type="edit_uncensored" if uncensored else "edit")
 
     if uncensored:
         args = [
             str(SCRIPTS_DIR / "demo_image_editing_uncensored.py"),
             "--image", resolved_src,
-            "--prompt", prompt,
+            "--prompt", processed_prompt,
             "--output", out_file,
         ]
         if not fast:
@@ -217,7 +221,7 @@ def edit_image(
         args = [
             str(SCRIPTS_DIR / "demo_cli.py"),
             "--image", resolved_src,
-            "--prompt", prompt,
+            "--prompt", processed_prompt,
             "--output", out_file,
         ]
         if fast:
@@ -235,7 +239,8 @@ def face_swap(
     target_image: str,
     use_lora: bool = True,
     fast: bool = True,
-    output_name: Optional[str] = None
+    output_name: Optional[str] = None,
+    prompt: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Transfiere el rostro de una persona (source_face) al cuerpo/escena de otra imagen (target_image).
@@ -246,6 +251,7 @@ def face_swap(
         use_lora: True para activar el LoRA BFS (Best Face Swap) de alta fidelidad.
         fast: True para modo rápido (~1024px, 4x más veloz, por defecto), False para 2K.
         output_name: Nombre opcional de salida.
+        prompt: Instrucción personalizada opcional para el intercambio.
     """
     src = resolve_image_path(source_face)
     tgt = resolve_image_path(target_image)
@@ -261,6 +267,8 @@ def face_swap(
         args += ["--lora", "Alissonerdx/BFS-Best-Face-Swap"]
     if not fast:
         args.append("--2k")
+    if prompt and prompt.strip():
+        args += ["--prompt", prompt.strip()]
 
     result = _run_script_subprocess(args)
     target_path = OUTPUTS_DIR / out_file
@@ -277,7 +285,8 @@ def group_photo(
     interaction: str = "standing shoulder to shoulder, smiling warmly, looking at the camera",
     aspect_ratio: str = "4:3",
     fast: bool = True,
-    output_name: Optional[str] = None
+    output_name: Optional[str] = None,
+    prompt: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Une a dos personas diferentes en una misma fotografía coherente.
@@ -291,24 +300,30 @@ def group_photo(
         aspect_ratio: Formato de la imagen ('4:3', '16:9', '1:1').
         fast: Modo rápido 1K.
         output_name: Nombre opcional de salida.
+        prompt: Prompt personalizado que anula el montaje automático.
     """
     p1 = resolve_image_path(person1)
     p2 = resolve_image_path(person2)
     out_file = _generate_output_name("group_photo", output_name)
+
+    proc_interaction = translate_and_enrich_prompt(interaction, context_type="interaction") if interaction else ""
+    proc_scene = translate_and_enrich_prompt(scene, context_type="scene") if scene else ""
 
     args = [
         str(SCRIPTS_DIR / "demo_group_photo.py"),
         "--person1", p1,
         "--person2", p2,
         "--mode", mode,
-        "--interaction", interaction,
+        "--interaction", proc_interaction,
         "--aspect-ratio", aspect_ratio,
         "--output", out_file,
     ]
-    if mode == "new_scene" and scene:
-        args += ["--scene", scene]
+    if mode == "new_scene" and proc_scene:
+        args += ["--scene", proc_scene]
     if fast:
         args.append("--fast")
+    if prompt and prompt.strip():
+        args += ["--prompt", prompt.strip()]
 
     result = _run_script_subprocess(args)
     target_path = OUTPUTS_DIR / out_file
@@ -322,7 +337,8 @@ def outfit_swap(
     outfit_image: str,
     use_lora: bool = True,
     fast: bool = True,
-    output_name: Optional[str] = None
+    output_name: Optional[str] = None,
+    prompt: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Cambia la vestimenta de una persona por la prenda o estilo de otra imagen (Virtual Try-On).
@@ -333,6 +349,7 @@ def outfit_swap(
         use_lora: True para activar el LoRA de consistencia de vestuario.
         fast: True para modo rápido (~1024px, 4x más veloz, por defecto), False para 2K.
         output_name: Nombre opcional de salida.
+        prompt: Instrucción personalizada opcional para la vestimenta.
     """
     person = resolve_image_path(person_image)
     outfit = resolve_image_path(outfit_image)
@@ -348,6 +365,8 @@ def outfit_swap(
         args.append("--no-lora")
     if not fast:
         args.append("--2k")
+    if prompt and prompt.strip():
+        args += ["--prompt", prompt.strip()]
 
     result = _run_script_subprocess(args)
     target_path = OUTPUTS_DIR / out_file
@@ -361,7 +380,8 @@ def camera_angle(
     angle: str = "three_quarter_right",
     use_lora: bool = True,
     fast: bool = True,
-    output_name: Optional[str] = None
+    output_name: Optional[str] = None,
+    custom_prompt: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Reorienta la perspectiva o el ángulo de cámara de una imagen (3D Novel View Synthesis).
@@ -379,6 +399,7 @@ def camera_angle(
         use_lora: True para activar el LoRA oficial de ángulos múltiples <mva>.
         fast: True para modo rápido (~1024px, 4x más veloz, por defecto), False para 2K.
         output_name: Nombre opcional de salida.
+        custom_prompt: Prompt personalizado opcional de ángulo.
     """
     img = resolve_image_path(image_path)
     out_file = _generate_output_name(f"angle_{angle}", output_name)
@@ -393,6 +414,8 @@ def camera_angle(
         args += ["--lora", "akhaliq/Qwen-Image-2.1-Multiple-Angles-LoRA"]
     if not fast:
         args.append("--2k")
+    if custom_prompt and custom_prompt.strip():
+        args += ["--custom-prompt", custom_prompt.strip()]
 
     result = _run_script_subprocess(args)
     target_path = OUTPUTS_DIR / out_file
@@ -405,7 +428,8 @@ def outpaint(
     image_path: str,
     ratio: str = "16:9",
     description: str = "",
-    output_name: Optional[str] = None
+    output_name: Optional[str] = None,
+    prompt: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Expande el lienzo de una imagen rellenando contextualmente el entorno (Outpainting / Uncrop).
@@ -415,9 +439,11 @@ def outpaint(
         ratio: Nuevo formato deseado: '16:9', '9:16', '4:3', '1:1' o 'expand_all' (zoom out general).
         description: Descripción opcional del entorno o paisaje con el que rellenar los bordes.
         output_name: Nombre opcional de salida.
+        prompt: Prompt personalizado completo para outpainting.
     """
     img = resolve_image_path(image_path)
     out_file = _generate_output_name("outpaint", output_name)
+    proc_desc = translate_and_enrich_prompt(description, context_type="outpaint") if description else ""
 
     args = [
         str(SCRIPTS_DIR / "demo_outpaint.py"),
@@ -425,8 +451,10 @@ def outpaint(
         "--ratio", ratio,
         "--output", out_file,
     ]
-    if description and description.strip():
-        args += ["--description", description.strip()]
+    if proc_desc and proc_desc.strip():
+        args += ["--description", proc_desc.strip()]
+    if prompt and prompt.strip():
+        args += ["--prompt", prompt.strip()]
 
     result = _run_script_subprocess(args)
     target_path = OUTPUTS_DIR / out_file
@@ -438,7 +466,8 @@ def outpaint(
 def restore(
     image_path: str,
     mode: str = "modern",
-    output_name: Optional[str] = None
+    output_name: Optional[str] = None,
+    prompt: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Restaura, desenfoca y mejora la calidad o súper-resolución de una fotografía.
@@ -447,6 +476,7 @@ def restore(
         image_path: Imagen a restaurar (o 'last').
         mode: 'modern' (elimina compresión, desenfoque y ruido) o 'old_photo' (arañazos, grano y daño físico).
         output_name: Nombre opcional de salida.
+        prompt: Instrucción personalizada opcional de restauración.
     """
     img = resolve_image_path(image_path)
     out_file = _generate_output_name("restore", output_name)
@@ -457,9 +487,98 @@ def restore(
         "--mode", mode,
         "--output", out_file,
     ]
+    if prompt and prompt.strip():
+        args += ["--prompt", prompt.strip()]
 
     result = _run_script_subprocess(args)
     target_path = OUTPUTS_DIR / out_file
     result["output_file"] = out_file
     result["output_path"] = str(target_path.resolve()) if target_path.exists() else None
     return result
+
+
+def image_to_prompt(
+    image_path: str,
+    additional_text: Optional[str] = None,
+    verbose: bool = True
+) -> Dict[str, Any]:
+    """
+    Convierte una imagen existente a prompt inverso estructurado en inglés y español (Image-to-Text / Reverse Prompting).
+    Permite opcionalmente incorporar texto o detalles adicionales que se integrarán
+    armoniosamente en el prompt resultante tanto en español como en inglés.
+    
+    Args:
+        image_path: Ruta a la imagen (o 'last' para la última).
+        additional_text: Texto o detalles adicionales en español o inglés a integrar en el prompt inverso.
+        verbose: Si True, imprime el análisis bilingüe en consola.
+    """
+    from core.image_interrogator import image_to_prompt as _i2p
+    resolved = resolve_image_path(image_path)
+    return _i2p(resolved, additional_text=additional_text, verbose=verbose)
+
+
+def enhance_prompt(prompt: str, verbose: bool = True) -> Dict[str, Any]:
+    """
+    Mejora y enriquece una idea o prompt breve para darle más sentido cinematográfico
+    y coherencia visual a la escena, generando la propuesta tanto en español como en inglés.
+    
+    Args:
+        prompt: Idea base o prompt a expandir.
+        verbose: Si True, imprime la comparación bilingüe en consola.
+    """
+    from core.prompt_utils import enhance_scene_prompt as _esp
+    res = _esp(prompt, verbose=verbose)
+    return {
+        "success": True,
+        "original": prompt,
+        "english": res["english"],
+        "spanish": res["spanish"],
+    }
+
+
+def merge_lora(
+    lora: str,
+    base_model: str = "Qwen/Qwen-Image-2.1-Turbo",
+    lora_scale: float = 1.0,
+    save_dir: Optional[str] = None,
+    prompt: Optional[str] = None,
+    image: Optional[str] = None,
+    aspect_ratio: str = "1:1",
+    output_name: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Carga y fusiona (fuse) los pesos de un LoRA permanentemente en el modelo base denoiser.
+    
+    Args:
+        lora: Ruta local a safetensors o ID en Hugging Face.
+        base_model: Modelo base denoiser.
+        lora_scale: Escala de fusión.
+        save_dir: Directorio de exportación del modelo fusionado.
+        prompt: Prompt opcional para probar la generación inmediatamente.
+        image: Imagen de referencia opcional si el LoRA es de edición.
+        aspect_ratio: Formato de la imagen generada.
+        output_name: Nombre opcional de salida.
+    """
+    out_file = _generate_output_name("fused_lora", output_name)
+    args = [
+        str(SCRIPTS_DIR / "merge_lora.py"),
+        "--lora", lora,
+        "--base-model", base_model,
+        "--lora-scale", str(lora_scale),
+        "--aspect-ratio", aspect_ratio,
+        "--output", out_file,
+    ]
+    if save_dir:
+        args += ["--save-dir", save_dir]
+    if prompt:
+        args += ["--prompt", prompt]
+    if image:
+        resolved_img = resolve_image_path(image)
+        args += ["--image", resolved_img]
+
+    result = _run_script_subprocess(args)
+    target_path = OUTPUTS_DIR / out_file
+    result["output_file"] = out_file
+    result["output_path"] = str(target_path.resolve()) if target_path.exists() else None
+    return result
+

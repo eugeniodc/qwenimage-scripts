@@ -18,6 +18,8 @@ from pathlib import Path
 # Directorio raíz del proyecto (un nivel arriba de scripts/)
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
 
 # Configurar aislamiento local de caché en cache/
 os.environ["HF_HOME"] = str(PROJECT_DIR / "cache" / "huggingface")
@@ -26,6 +28,7 @@ os.environ["TORCH_HOME"] = str(PROJECT_DIR / "cache" / "torch")
 import torch
 from diffusers import QwenImage21Pipeline
 from diffusers.utils import load_image
+from core.prompt_utils import translate_and_enrich_prompt
 
 # Preajustes oficiales de resolución
 ASPECT_RATIOS = {
@@ -256,8 +259,11 @@ def main():
 
         generator = torch.Generator("cpu").manual_seed(args.seed)
 
+        context_type = "edit" if ref_image is not None else "t2i"
+        processed_prompt = translate_and_enrich_prompt(args.prompt, context_type=context_type)
+
         call_kwargs = {
-            "prompt": args.prompt,
+            "prompt": processed_prompt,
             "width": w,
             "height": h,
             "num_inference_steps": 8,

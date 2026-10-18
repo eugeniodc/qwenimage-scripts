@@ -20,6 +20,8 @@ from pathlib import Path
 # Directorio raíz del proyecto
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
 
 # Configurar aislamiento local de caché
 os.environ["HF_HOME"] = str(PROJECT_DIR / "cache" / "huggingface")
@@ -29,6 +31,7 @@ import torch
 from diffusers import QwenImage21Pipeline
 from diffusers.utils import load_image
 from PIL import Image
+from core.prompt_utils import translate_and_enrich_prompt
 
 DEFAULT_OUTPAINT_LORA = "ausboss/Qwen-Image-2.1-Outpaint-LoRA"
 DEFAULT_WEIGHT_NAME = "qwen-image-2.1-outpaint-v2.safetensors"
@@ -116,6 +119,12 @@ def parse_args():
         help="Descripción opcional del entorno a expandir (ej: 'in an open sunny field')",
     )
     parser.add_argument(
+        "--prompt",
+        type=str,
+        default=None,
+        help="Prompt personalizado completo para outpainting (anula el prompt automático)",
+    )
+    parser.add_argument(
         "--lora",
         type=str,
         default=DEFAULT_OUTPAINT_LORA,
@@ -176,12 +185,16 @@ def main():
     print(f"[+] Tamaño original: {raw_image.size} -> Tamaño expandido: {padded_canvas.size}")
 
     # Prompt oficial del autor del LoRA
-    prompt = (
-        "Outpaint the image: replace the solid gray areas with a seamless continuation "
-        "of the scene, keeping the existing picture unchanged."
-    )
-    if args.description:
-        prompt += f" Scene: {args.description}"
+    if args.prompt:
+        prompt = translate_and_enrich_prompt(args.prompt, context_type="outpaint")
+    else:
+        prompt = (
+            "Outpaint the image: replace the solid gray areas with a seamless continuation "
+            "of the scene, keeping the existing picture unchanged."
+        )
+        if args.description:
+            desc = translate_and_enrich_prompt(args.description, context_type="outpaint")
+            prompt += f" Scene: {desc}"
 
     print(f"\n[+] Prompt de Outpaint:")
     print(f"    \"{prompt}\"")

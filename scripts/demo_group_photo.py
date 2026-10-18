@@ -23,6 +23,8 @@ from pathlib import Path
 # Directorio raíz del proyecto (un nivel arriba de scripts/)
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
 
 # Configurar aislamiento local de caché en cache/
 os.environ["HF_HOME"] = str(PROJECT_DIR / "cache" / "huggingface")
@@ -31,6 +33,7 @@ os.environ["TORCH_HOME"] = str(PROJECT_DIR / "cache" / "torch")
 import torch
 from diffusers import QwenImage21Pipeline
 from diffusers.utils import load_image
+from core.prompt_utils import translate_and_enrich_prompt
 
 # Preajustes oficiales de resolución
 ASPECT_RATIOS = {
@@ -210,30 +213,34 @@ def main():
 
     # Construir prompt optimizado
     if args.prompt:
-        final_prompt = args.prompt
-    elif args.mode == "keep_scene":
-        final_prompt = (
-            f"In <image1>, keep the person and the entire background scenery. "
-            f"Seamlessly add the person from <image2> {args.interaction}. "
-            f"Match the exact lighting, shadows, colors, perspective, and camera depth of field of <image1>. "
-            f"Natural skin tones, sharp facial features matching <image2>, 8k photorealistic."
-        )
-    else:  # new_scene
-        if len(loaded_images) == 2:
+        final_prompt = translate_and_enrich_prompt(args.prompt, context_type="edit")
+    else:
+        # Traducir y enriquecer la escena e interacción si son provistas
+        scene_desc = translate_and_enrich_prompt(args.scene, context_type="scene") if args.scene else ""
+        interaction_desc = translate_and_enrich_prompt(args.interaction, context_type="interaction") if args.interaction else ""
+        if args.mode == "keep_scene":
             final_prompt = (
-                f"A high quality, authentic photograph of the person from <image1> and the person from <image2> "
-                f"together in the same scene. They are {args.interaction}, {args.scene}. "
-                f"Preserve the exact facial features, likeness, and identities of both individuals from <image1> and <image2>. "
-                f"Harmonious natural lighting, realistic cast shadows, matching camera depth of field, sharp focus, 8k resolution."
+                f"In <image1>, keep the person and the entire background scenery. "
+                f"Seamlessly add the person from <image2> {interaction_desc}. "
+                f"Match the exact lighting, shadows, colors, perspective, and camera depth of field of <image1>. "
+                f"Natural skin tones, sharp facial features matching <image2>, realistic photorealistic integration."
             )
-        else:
-            refs = ", ".join([f"<image{i}>" for i in range(1, len(loaded_images) + 1)])
-            final_prompt = (
-                f"A high quality, authentic photograph of the people from {refs} together in the same scene. "
-                f"They are {args.interaction}, {args.scene}. "
-                f"Preserve the exact facial features, likeness, and identities of each person from their reference images. "
-                f"Harmonious ambient lighting, realistic cast shadows, sharp focus, 8k resolution."
-            )
+        else:  # new_scene
+            if len(loaded_images) == 2:
+                final_prompt = (
+                    f"A authentic photograph of the person from <image1> and the person from <image2> "
+                    f"together in the same scene. They are {interaction_desc}, {scene_desc}. "
+                    f"Preserve the exact facial features, likeness, and identities of both individuals from <image1> and <image2>. "
+                    f"Harmonious natural lighting, realistic cast shadows, matching camera depth of field, sharp focus."
+                )
+            else:
+                refs = ", ".join([f"<image{i}>" for i in range(1, len(loaded_images) + 1)])
+                final_prompt = (
+                    f"A authentic photograph of the people from {refs} together in the same scene. "
+                    f"They are {interaction_desc}, {scene_desc}. "
+                    f"Preserve the exact facial features, likeness, and identities of each person from their reference images. "
+                    f"Harmonious ambient lighting, realistic cast shadows, sharp focus."
+                )
 
     print(f"\n[+] Prompt generado:")
     print(f"    \"{final_prompt}\"")

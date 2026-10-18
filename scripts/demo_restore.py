@@ -21,6 +21,8 @@ from pathlib import Path
 # Directorio raíz del proyecto
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
 
 # Configurar aislamiento local de caché
 os.environ["HF_HOME"] = str(PROJECT_DIR / "cache" / "huggingface")
@@ -29,6 +31,7 @@ os.environ["TORCH_HOME"] = str(PROJECT_DIR / "cache" / "torch")
 import torch
 from diffusers import QwenImage21Pipeline
 from diffusers.utils import load_image
+from core.prompt_utils import translate_and_enrich_prompt
 
 DEFAULT_RESTORE_LORA = "ausboss/Qwen-Image-2.1-Restore-LoRA"
 DEFAULT_WEIGHT_NAME = "qwen-image-2.1-restore.safetensors"
@@ -67,6 +70,12 @@ def parse_args():
         choices=["modern", "old_photo"],
         default="modern",
         help="Modo: 'modern' (desenfoque/compresión) o 'old_photo' (arañazos/polvo/fotos antiguas)",
+    )
+    parser.add_argument(
+        "--prompt",
+        type=str,
+        default=None,
+        help="Prompt de restauración personalizado opcional (anula el prompt por defecto)",
     )
     parser.add_argument(
         "--lora",
@@ -135,8 +144,10 @@ def main():
         target_w = int(((target_w * scale) + 31) // 32) * 32
         target_h = int(((target_h * scale) + 31) // 32) * 32
 
-    # Prompt oficial del autor según modo
-    if args.mode == "old_photo":
+    # Prompt de restauración (personalizado o predeterminado por el autor)
+    if args.prompt:
+        prompt = translate_and_enrich_prompt(args.prompt, context_type="edit")
+    elif args.mode == "old_photo":
         prompt = (
             "Restore the old photo: remove scratches, dust, fading and grain and recover "
             "sharp, natural detail and color, keeping the same composition and people."

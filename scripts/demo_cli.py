@@ -8,10 +8,13 @@ Guarda las imágenes generadas por defecto en: outputs/output.png
 import argparse
 import os
 from pathlib import Path
+import sys
 
 # Directorio raíz del proyecto (un nivel arriba de scripts/)
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
 
 # Configurar aislamiento local de caché en cache/
 os.environ["HF_HOME"] = str(PROJECT_DIR / "cache" / "huggingface")
@@ -20,6 +23,7 @@ os.environ["TORCH_HOME"] = str(PROJECT_DIR / "cache" / "torch")
 import torch
 from diffusers import QwenImage21Pipeline
 from diffusers.utils import load_image
+from core.prompt_utils import translate_and_enrich_prompt
 
 # Relaciones de aspecto y dimensiones recomendadas según la documentación de Qwen
 ASPECT_RATIOS = {
@@ -131,6 +135,9 @@ def main():
     if not out_path.is_absolute():
         out_path = outputs_dir / out_path
 
+    context_type = "edit" if args.image else "t2i"
+    processed_prompt = translate_and_enrich_prompt(args.prompt, context_type=context_type)
+
     print("=" * 65)
     print("🚀 Qwen-Image-2.1-Turbo | CLI")
     print("=" * 65)
@@ -142,7 +149,8 @@ def main():
     print(f"[*] Relación de aspecto:    {args.aspect_ratio} ({width}x{height})")
     print(f"[*] Pasos de inferencia:    {args.steps} pasos Turbo")
     print(f"[*] Semilla:                {args.seed}")
-    print(f"[*] Prompt:                 {args.prompt}")
+    print(f"[*] Prompt original:        {args.prompt}")
+    print(f"[*] Prompt en inglés:       {processed_prompt}")
     print(f"[*] Archivo de salida:      {out_path}")
 
     print("\n[*] Cargando modelo...")
@@ -154,7 +162,7 @@ def main():
 
     generator = torch.Generator("cpu").manual_seed(args.seed)
     kwargs = {
-        "prompt": args.prompt,
+        "prompt": processed_prompt,
         "width": width,
         "height": height,
         "num_inference_steps": args.steps,

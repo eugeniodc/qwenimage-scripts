@@ -22,6 +22,8 @@ from pathlib import Path
 # Directorio raíz del proyecto
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
 
 # Configurar aislamiento local de caché
 os.environ["HF_HOME"] = str(PROJECT_DIR / "cache" / "huggingface")
@@ -30,6 +32,7 @@ os.environ["TORCH_HOME"] = str(PROJECT_DIR / "cache" / "torch")
 import torch
 from diffusers import QwenImage21Pipeline
 from diffusers.utils import load_image
+from core.prompt_utils import translate_and_enrich_prompt
 
 DEFAULT_CAMERA_LORA = "akhaliq/Qwen-Image-2.1-Multiple-Angles-LoRA"
 DEFAULT_CAMERA_WEIGHT = "multiple_angles_step1000.safetensors"
@@ -210,7 +213,7 @@ def main():
     # Configurar prompt según uso de LoRA o modo nativo
     preset_info = ANGLE_PRESETS[args.angle]
     if args.custom_prompt:
-        prompt = args.custom_prompt
+        prompt = translate_and_enrich_prompt(args.custom_prompt, context_type="edit")
     elif args.lora:
         # Gramática oficial requerida por el LoRA Multiple-Angles
         prompt = preset_info["mva"]
