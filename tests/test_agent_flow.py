@@ -91,12 +91,72 @@ class TestAgentAndCoreTools(unittest.TestCase):
         parsed3 = agent._extract_json_action(sample_response3)
         self.assertIsNone(parsed3)
 
+    def test_system_prompt_english_translation_and_enrichment_rule(self):
+        """Verifica que el SYSTEM_PROMPT exija la traducción al inglés y enriquecimiento de prompts."""
+        self.assertIn("REGLA FUNDAMENTAL DE TRADUCCIÓN Y ENRIQUECIMIENTO", SYSTEM_PROMPT)
+        self.assertIn("inglés", SYSTEM_PROMPT.lower())
+        self.assertIn("esencia", SYSTEM_PROMPT.lower())
+        self.assertIn("elementos necesarios", SYSTEM_PROMPT.lower())
+
+    def test_tool_map_completeness(self):
+        """Verifica que todas las herramientas clave están mapeadas en el Agente."""
+        from agent import TOOL_MAP
+        expected_tools = [
+            "generate_image",
+            "edit_image",
+            "face_swap",
+            "group_photo",
+            "outfit_swap",
+            "camera_angle",
+            "outpaint",
+            "restore",
+            "image_to_prompt",
+            "enhance_prompt",
+            "merge_lora",
+        ]
+        for tool in expected_tools:
+            self.assertIn(tool, TOOL_MAP, f"La herramienta '{tool}' debe estar en TOOL_MAP")
+
+    def test_execute_actions_param_normalization(self):
+        """Verifica que execute_actions normaliza alias de parámetros."""
+        agent = OMLXImageAgent()
+        # Mock func en TOOL_MAP
+        from unittest.mock import MagicMock
+        mock_func = MagicMock(return_value={"success": True, "output_path": "/tmp/out.png", "output_file": "out.png"})
+        from agent import TOOL_MAP
+        orig_edit = TOOL_MAP["edit_image"]
+        TOOL_MAP["edit_image"] = mock_func
+
+        try:
+            payload = {
+                "actions": [
+                    {
+                        "tool": "edit_image",
+                        "params": {
+                            "image": "sample_images/eugenio.jpg",
+                            "prompt": "make it cinematic"
+                        }
+                    }
+                ]
+            }
+            results = agent.execute_actions(payload)
+            mock_func.assert_called_once()
+            called_kwargs = mock_func.call_args.kwargs
+            self.assertIn("image_path", called_kwargs)
+            self.assertEqual(called_kwargs["image_path"], "sample_images/eugenio.jpg")
+            self.assertTrue(results[0]["success"])
+        finally:
+            TOOL_MAP["edit_image"] = orig_edit
+
     def test_omlx_live_connection(self):
         agent = OMLXImageAgent()
-        # Verificar handshake con el servidor local oMLX
+        # Verificar handshake con el servidor local oMLX si está en ejecución
         connected = agent.check_connection()
-        self.assertTrue(connected, "El servidor oMLX en http://localhost:8000 debe estar activo")
+        if not connected:
+            self.skipTest("El servidor local oMLX no está activo en http://localhost:8000/v1")
+        self.assertTrue(connected)
 
 
 if __name__ == "__main__":
     unittest.main()
+

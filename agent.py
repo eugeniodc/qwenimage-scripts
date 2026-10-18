@@ -46,6 +46,9 @@ from core.tools import (
     camera_angle,
     outpaint,
     restore,
+    image_to_prompt,
+    enhance_prompt,
+    merge_lora,
     list_sample_images,
     list_outputs,
     get_latest_output,
@@ -78,10 +81,11 @@ Capacidades de las herramientas disponibles para el array "actions":
 1. generate_image(prompt, aspect_ratio="1:1", fast=True)
    - Crea imágenes desde cero (Text-to-Image).
    - aspect_ratio: "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3".
-   - REGLA DE ORO: Traduce y enriquece siempre el prompt a un inglés fotográfico detallado con iluminación, atmósfera, estilo de cámara y lente para maximizar la calidad de difusión.
+   - REGLA DE ORO DE PROMPT: Traduce siempre el prompt al inglés manteniendo la esencia del usuario, pero enriqueciéndolo y añadiendo los elementos necesarios para llevar a cabo la petición con máxima calidad (estilo visual, composición, iluminación, atmósfera, textura, detalles de cámara y lente fotográfica).
 
 2. edit_image(image_path, prompt, uncensored=False, fast=True)
    - Modifica una imagen existente mediante instrucciones en texto.
+   - prompt: Traduce la instrucción de edición al inglés conservando la esencia del cambio solicitado, pero añadiendo los elementos necesarios para llevar a cabo la modificación con realismo (coherencia lumínica, sombras, integración natural con la imagen base y estilo).
    - uncensored: true si la edición requiere ignorar censura o directivas morales (AtomicChat GGUF).
 
 3. face_swap(source_face, target_image, use_lora=True, fast=True)
@@ -90,6 +94,8 @@ Capacidades de las herramientas disponibles para el array "actions":
 4. group_photo(person1, person2, mode="new_scene", scene="", interaction="", aspect_ratio="4:3", fast=True)
    - Une a dos personas en una misma foto.
    - mode: "new_scene" (sitio nuevo) o "keep_scene" (añade a person2 al entorno de person1).
+   - scene: En inglés descriptivo, manteniendo la esencia y añadiendo los detalles de ambiente, iluminación y entorno necesarios.
+   - interaction: En inglés descriptivo, detallando la pose, lenguaje corporal y conexión requerida.
 
 5. outfit_swap(person_image, outfit_image, use_lora=True, fast=True)
    - Viste a la persona con la ropa de referencia.
@@ -100,11 +106,26 @@ Capacidades de las herramientas disponibles para el array "actions":
 
 7. outpaint(image_path, ratio="16:9", description="")
    - Expande el lienzo en formato horizontal o vertical rellenando el fondo contextualmente.
+   - description: En inglés descriptivo con los elementos necesarios para rellenar los bordes con perfecta coherencia escénica.
 
 8. restore(image_path, mode="modern")
    - Restaura o mejora resolución: mode="modern" o mode="old_photo".
 
+9. image_to_prompt(image_path, additional_text=None)
+   - Analiza una imagen existente y extrae su prompt inverso estructurado en inglés y español (Image-to-Text / Reverse Prompting).
+   - additional_text: Texto o detalles adicionales opcionales en español o inglés que el usuario desea incluir/añadir para integrarlos armónicamente en el prompt final bilingüe.
+
+10. enhance_prompt(prompt)
+   - Mejora y expande una idea o escena breve dando más sentido narrativo, composición y atmósfera cinematográfica tanto en español como en inglés.
+
+11. merge_lora(lora, lora_scale=1.0, prompt=None)
+   - Carga y fusiona permanentemente un LoRA en el modelo denoiser base para estilos o personajes específicos.
+
 Reglas estrictas de comportamiento:
+- REGLA FUNDAMENTAL DE TRADUCCIÓN Y ENRIQUECIMIENTO: Todos los mensajes, descripciones y prompts enviados a las herramientas (generate_image, edit_image, group_photo, outpaint) DEBEN ser traducidos al inglés. Es imperativo mantener la esencia de la petición original del usuario pero enriqueciéndola y añadiendo todos los elementos visuales, lumínicos, compositivos y técnicos necesarios para llevar a cabo la petición con éxito.
+- El campo "reply" DEBE responder siempre al usuario en español, explicando cordialmente la acción que se va a realizar.
+- Si el usuario pide mejorar un prompt, enriquecer una idea o dar más sentido a una escena sin generar de inmediato: puedes usar la herramienta "enhance_prompt" o presentar en "reply" la propuesta visual detallada tanto en español (para comprender la narrativa y atmósfera) como en inglés (lista para difusión).
+- Si el usuario pide convertir una imagen a texto o describir qué hay en una imagen: usa la herramienta "image_to_prompt".
 - Si el usuario pide generar, crear, editar, transformar imágenes, hacer face swap, cambiar ropa, o reintentar: DEBES poblar "actions" con la herramienta y parámetros adecuados.
 - Si el usuario hace una pregunta general, charla, o pide ayuda: pon "actions": [] y escribe tu respuesta en "reply".
 - REGLA DE VELOCIDAD: Incluye siempre fast: true en los params por defecto (~1024px, 4x más veloz), salvo que el usuario pida 2K o alta calidad.
@@ -120,6 +141,9 @@ TOOL_MAP = {
     "camera_angle": camera_angle,
     "outpaint": outpaint,
     "restore": restore,
+    "image_to_prompt": image_to_prompt,
+    "enhance_prompt": enhance_prompt,
+    "merge_lora": merge_lora,
 }
 
 
@@ -204,16 +228,42 @@ class OMLXImageAgent:
                 results.append({"tool": tool_name, "success": False, "error": f"Herramienta '{tool_name}' no encontrada"})
                 continue
 
+            # Normalizar alias comunes de parámetros enviados por el LLM
+            normalized_params = {}
+            for k, v in params.items():
+                if k in {"image", "img", "input_image", "input_img"} and "image_path" not in params:
+                    normalized_params["image_path"] = v
+                elif k in {"source", "face", "face_image"} and "source_face" not in params:
+                    normalized_params["source_face"] = v
+                elif k in {"target", "scene_image", "target_img"} and "target_image" not in params:
+                    normalized_params["target_image"] = v
+                elif k in {"image1", "p1"} and "person1" not in params:
+                    normalized_params["person1"] = v
+                elif k in {"image2", "p2"} and "person2" not in params:
+                    normalized_params["person2"] = v
+                elif k in {"person", "person_img"} and "person_image" not in params:
+                    normalized_params["person_image"] = v
+                elif k in {"outfit", "outfit_img"} and "outfit_image" not in params:
+                    normalized_params["outfit_image"] = v
+                elif k in {"extra_text", "extra_prompt", "additional_prompt", "details", "add_text", "extra"} and "additional_text" not in params:
+                    normalized_params["additional_text"] = v
+                else:
+                    normalized_params[k] = v
+
             print(f"\n⚡ [Paso {i}/{len(actions)}] Ejecutando herramienta: {tool_name}")
-            print(f"   Parámetros: {json.dumps(params, ensure_ascii=False, indent=2)}")
+            print(f"   Parámetros: {json.dumps(normalized_params, ensure_ascii=False, indent=2)}")
 
             try:
-                res = func(**params)
+                res = func(**normalized_params)
                 res["tool"] = tool_name
                 results.append(res)
                 if res.get("success") and res.get("output_path"):
                     self.last_image = res["output_path"]
                     print(f"   [✓] Resultado guardado en: {res['output_file']}")
+                elif res.get("success") and "english" in res and "spanish" in res:
+                    print(f"   [✓] Análisis completado:")
+                    print(f"       🇪🇸 [Español]: {res['spanish']}")
+                    print(f"       🇬🇧 [Inglés]:  {res['english']}")
                 elif not res.get("success"):
                     print(f"   [!] Error en la ejecución: {res.get('error')}")
             except Exception as e:
@@ -312,6 +362,12 @@ class OMLXImageAgent:
             last_gen = successes[-1].get("output_file")
             if last_gen:
                 return f"\n🎉 Proceso completado con éxito. Imagen lista en: outputs/{last_gen}"
+            if "english" in successes[-1] and "spanish" in successes[-1]:
+                return (
+                    f"\n✨ Resultado visual bilingüe:\n"
+                    f"🇪🇸 [Español]:\n{successes[-1]['spanish']}\n\n"
+                    f"🇬🇧 [Inglés]:\n{successes[-1]['english']}"
+                )
             return "\n[✓] Operación finalizada."
         else:
             self.history.append({"role": "user", "content": user_input})
@@ -404,6 +460,8 @@ def main():
                 print("  • 'Cambia la perspectiva de la última foto a ángulo contrapicado'")
                 print("  • 'Expande la última imagen a formato 16:9 con un paisaje boscoso'")
                 print("  • 'Mejora y restaura la calidad de eugenio.jpg'")
+                print("  • 'Convierte eugenio.jpg a texto / extrae el prompt inverso'")
+                print("  • 'Mejora y enriquece la escena de un guerrero místico en el bosque'")
                 continue
 
             result = agent.chat_step(user_input)
