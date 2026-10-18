@@ -55,6 +55,11 @@ OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 SAMPLE_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
+from core.prompt_utils import translate_and_enrich_prompt, enhance_scene_prompt
+from core.image_interrogator import image_to_prompt
+
+
+
 def clear_screen():
     print("\n" * 2)
 
@@ -129,6 +134,7 @@ def menu_text_to_image():
     )
 
     if prompt:
+        prompt = translate_and_enrich_prompt(prompt, context_type="t2i")
         args = [
             str(SCRIPTS_DIR / "demo_cli.py"),
             "--prompt", prompt,
@@ -153,6 +159,8 @@ def menu_image_editing():
         print("[!] El prompt de edición no puede estar vacío.")
         input("Presiona Enter...")
         return
+
+    prompt = translate_and_enrich_prompt(prompt, context_type="edit")
 
     print("\nModo de velocidad y resolución:")
     print("  [1] ⚡ Rápido (~1024px, recomendado, hasta 4x más veloz)")
@@ -187,6 +195,8 @@ def menu_image_editing_uncensored():
         print("[!] El prompt de edición no puede estar vacío.")
         input("Presiona Enter...")
         return
+
+    prompt = translate_and_enrich_prompt(prompt, context_type="edit_uncensored")
 
     print("\nModo de velocidad y resolución:")
     print("  [1] ⚡ Rápido (~1024px, recomendado, 8 pasos Turbo)")
@@ -237,6 +247,11 @@ def menu_face_swap():
     if use_lora in {"s", "si", "y", "yes"}:
         args += ["--lora", "Alissonerdx/BFS-Best-Face-Swap"]
 
+    custom_prompt = input("👉 Prompt personalizado opcional (Enter para usar el estándar optimizado): ").strip()
+    if custom_prompt:
+        custom_prompt = translate_and_enrich_prompt(custom_prompt, context_type="edit")
+        args += ["--prompt", custom_prompt]
+
     run_script(args)
 
 def menu_group_photo():
@@ -265,7 +280,9 @@ def menu_group_photo():
         print("  • 'en una playa al atardecer frente al mar'")
         print("  • 'en una terraza de restaurante de noche con luces cálidas'")
         scene = input("👉 Describe el entorno o escenario [cafetería acogedora]: ").strip()
-        if not scene:
+        if scene:
+            scene = translate_and_enrich_prompt(scene, context_type="scene")
+        else:
             scene = "at a stylish cozy cafe, sitting together enjoying coffee, warm ambient lighting"
 
     print("\nEjemplos de pose o interacción:")
@@ -273,7 +290,9 @@ def menu_group_photo():
     print("  • 'hombro con hombro sonriendo naturalmente'")
     print("  • 'sentados juntos charlando relajadamente'")
     interaction = input("👉 Describe la pose o interacción [hombro con hombro sonriendo]: ").strip()
-    if not interaction:
+    if interaction:
+        interaction = translate_and_enrich_prompt(interaction, context_type="interaction")
+    else:
         interaction = "standing shoulder to shoulder, smiling warmly, looking at the camera"
 
     print("\nRelaciones de aspecto: [1] 4:3 (recomendado)  [2] 16:9 (horizontal)  [3] 1:1 (cuadrado)")
@@ -348,6 +367,11 @@ def menu_camera_angle():
     if use_lora in {"s", "si", "y", "yes"}:
         args += ["--lora", "akhaliq/Qwen-Image-2.1-Multiple-Angles-LoRA"]
 
+    custom_prompt = input("👉 Prompt personalizado opcional (Enter para usar el estándar): ").strip()
+    if custom_prompt:
+        custom_prompt = translate_and_enrich_prompt(custom_prompt, context_type="edit")
+        args += ["--custom-prompt", custom_prompt]
+
     run_script(args)
 
 def menu_outfit_swap():
@@ -377,6 +401,11 @@ def menu_outfit_swap():
     if use_lora in {"n", "no"}:
         args += ["--no-lora"]
 
+    custom_prompt = input("👉 Prompt personalizado opcional (Enter para usar el estándar): ").strip()
+    if custom_prompt:
+        custom_prompt = translate_and_enrich_prompt(custom_prompt, context_type="edit")
+        args += ["--prompt", custom_prompt]
+
     run_script(args)
 
 def menu_outpaint():
@@ -396,6 +425,9 @@ def menu_outpaint():
     ratio = ratios.get(choice, "16:9")
 
     desc = input("\n👉 Descripción opcional del entorno a rellenar (ej: 'en un bosque soleado'): ").strip()
+    if desc:
+        desc = translate_and_enrich_prompt(desc, context_type="outpaint")
+
     out_name = sanitize_output_filename(
         input("👉 Nombre de archivo de salida [outpaint_result.png]: ").strip(),
         "outpaint_result.png"
@@ -471,6 +503,7 @@ def menu_merge_lora():
     if action in {"1", "3", ""}:
         prompt = input("\n👉 Escribe el prompt para la imagen de prueba: ").strip()
         if prompt:
+            prompt = translate_and_enrich_prompt(prompt, context_type="t2i")
             args += ["--prompt", prompt]
             out_name = sanitize_output_filename(
                 input("👉 Nombre de archivo de salida [fused_output.png]: ").strip(),
@@ -535,6 +568,108 @@ def menu_check_cache():
         subprocess.run(["huggingface-cli", "cache", "scan"])
         input("Presiona Enter...")
 
+def menu_enhance_scene_prompt():
+    print("\n--- 🪄 13. Mejora del Prompt para Dar Más Sentido a la Escena ---")
+    print("Transforma una idea básica en una escena rica en narrativa visual,")
+    print("profundidad ambiental, iluminación cinematográfica y composición.")
+    print("El resultado se presentará tanto en ESPAÑOL como en INGLÉS.\n")
+
+    raw_idea = input("👉 Escribe tu idea o borrador de escena: ").strip()
+    if not raw_idea:
+        print("[!] No se introdujo ningún texto.")
+        input("Presiona Enter...")
+        return
+
+    print("\n⏳ Analizando escena, enriqueciendo atmósfera y componiendo iluminación...")
+    enhanced = enhance_scene_prompt(raw_idea, verbose=True)
+
+    print("¿Deseas generar la imagen ahora con esta escena optimizada?")
+    print("  [1] 🎨 Sí, generar imagen ahora con este prompt")
+    print("  [2] ↩️  Volver al menú principal")
+    action = input("\n👉 Elige una opción [1 o 2] (por defecto 1): ").strip()
+
+    if action in {"", "1"}:
+        print("\nRelaciones de aspecto: [1] 1:1 (cuadrado)  [2] 16:9 (horizontal)  [3] 9:16 (vertical)  [4] 4:3 (foto)")
+        ar_choice = input("👉 Elige formato (1, 2, 3, 4) [por defecto 2]: ").strip()
+        ar_map = {"1": "1:1", "2": "16:9", "3": "9:16", "4": "4:3"}
+        aspect = ar_map.get(ar_choice, "16:9")
+
+        print("\nModo de velocidad y resolución:")
+        print("  [1] ⚡ Rápido (~1024px, recomendado, hasta 4x más veloz)")
+        print("  [2] 💎 Alta Calidad 2K (~2048px)")
+        speed_choice = input("👉 Elige modo (1 o 2) [por defecto 1]: ").strip()
+        is_fast = speed_choice != "2"
+
+        out_name = sanitize_output_filename(
+            input("\n👉 Nombre de archivo de salida [enhanced_scene.png]: ").strip(),
+            "enhanced_scene.png"
+        )
+
+        args = [
+            str(SCRIPTS_DIR / "demo_cli.py"),
+            "--prompt", enhanced["english"],
+            "--aspect-ratio", aspect,
+            "--output", out_name,
+        ]
+        if is_fast:
+            args.append("--fast")
+
+        run_script(args)
+
+
+def menu_image_to_prompt():
+    print("\n--- 🔍 14. Convertir Imagen a Texto / Prompt Inverso (Image-to-Prompt) ---")
+    print("Analiza cualquier imagen o fotografía existente y genera su prompt inverso")
+    print("estructurado tanto en ESPAÑOL como en INGLÉS (optimizado para difusión Qwen-Image).\n")
+
+    img_path = choose_file("Elige la imagen a convertir en texto (o 'last' para la última salida)")
+    if not img_path:
+        return
+
+    add_text = input("\n👉 Texto o detalles adicionales a incluir/añadir (opcional, Enter para omitir): ").strip()
+
+    print("\n⏳ Analizando visualmente la imagen e integrando detalles en español e inglés...")
+    res = image_to_prompt(img_path, additional_text=add_text if add_text else None, verbose=True)
+
+    if not res.get("success"):
+        print(f"[!] Error al analizar la imagen: {res.get('error')}")
+        input("Presiona Enter...")
+        return
+
+    print("¿Deseas generar una nueva imagen utilizando este prompt inverso?")
+    print("  [1] 🎨 Sí, recrear / generar imagen ahora con este prompt inverso")
+    print("  [2] ↩️  Volver al menú principal")
+    action = input("\n👉 Elige una opción [1 o 2] (por defecto 2): ").strip()
+
+    if action == "1":
+        print("\nRelaciones de aspecto: [1] 1:1 (cuadrado)  [2] 16:9 (horizontal)  [3] 9:16 (vertical)  [4] 4:3 (foto)")
+        ar_choice = input("👉 Elige formato (1, 2, 3, 4) [por defecto 1]: ").strip()
+        ar_map = {"1": "1:1", "2": "16:9", "3": "9:16", "4": "4:3"}
+        aspect = ar_map.get(ar_choice, "1:1")
+
+        print("\nModo de velocidad y resolución:")
+        print("  [1] ⚡ Rápido (~1024px, recomendado, hasta 4x más veloz)")
+        print("  [2] 💎 Alta Calidad 2K (~2048px)")
+        speed_choice = input("👉 Elige modo (1 o 2) [por defecto 1]: ").strip()
+        is_fast = speed_choice != "2"
+
+        out_name = sanitize_output_filename(
+            input("\n👉 Nombre de archivo de salida [recreated_from_reverse_prompt.png]: ").strip(),
+            "recreated_from_reverse_prompt.png"
+        )
+
+        args = [
+            str(SCRIPTS_DIR / "demo_cli.py"),
+            "--prompt", res["english"],
+            "--aspect-ratio", aspect,
+            "--output", out_name,
+        ]
+        if is_fast:
+            args.append("--fast")
+
+        run_script(args)
+
+
 def main():
     while True:
         clear_screen()
@@ -544,6 +679,8 @@ def main():
         print(f"      🤖 PANEL DE CONTROL — QWEN-IMAGE-2.1-TURBO [{status_tag}]")
         print("=" * 62)
         print("  [A] 🧠 MODO AGENTE LOCAL (vía oMLX • Qwen2.5-7B Uncensored)")
+        print("  [P] 🪄 MEJORA DEL PROMPT Y SENTIDO DE ESCENA (Bilingüe ES + EN)")
+        print("  [I] 🔍 CONVERTIR IMAGEN A TEXTO / PROMPT INVERSO (ES + EN)")
         print("  ─────────────────────────────────────────────────────────────")
         print("  [1] 🎨 Generar imagen desde texto (Text-to-Image)")
         print("  [2] 🖌️  Editar imagen existente (Image Editing)")
@@ -557,14 +694,20 @@ def main():
         print("  [10] 🔀 Unir / Fusionar un LoRA (Merge & Fuse LoRA)")
         print("  [11] 📂 Ver imágenes generadas (en outputs/)")
         print("  [12] 🔍 Ver uso de disco y caché")
+        print("  [13] 🪄 Mejora de escena del prompt (ES / EN)")
+        print("  [14] 🔍 Imagen a texto / Prompt inverso (Image-to-Prompt)")
         print("  [0] 🚪 Salir")
         print("=" * 62)
         
-        choice = input("👉 Selecciona una opción (A, 0-12): ").strip()
+        choice = input("👉 Selecciona una opción (A, P, I, 0-14): ").strip()
         choice_lower = choice.lower()
 
         if choice_lower in {"a", "agente", "agent"}:
             run_script([str(PROJECT_DIR / "agent.py")])
+        elif choice_lower in {"p", "prompt", "mejora"} or choice == "13":
+            menu_enhance_scene_prompt()
+        elif choice_lower in {"i", "interrogate", "caption", "inverso"} or choice == "14":
+            menu_image_to_prompt()
         elif choice == "1":
             menu_text_to_image()
         elif choice == "2":
